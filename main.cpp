@@ -416,61 +416,6 @@ void selectFromRel_Binary(int val, int relStart, int relEnd, int outputStartBloc
     }
 }
 
-void projection(int rel, int row){
-    // 投影函数，输入待投影的关系和列号
-    // TODO: 完成读取迭代器，完成这个功能
-    return;
-}
-
-void printIO(Buffer *buff){
-    // 打印IO次数
-    std::cout << '\n' << "IO's is " << buff->numIO << std::endl;
-}
-
-int main() {
-    // 以例程为脚手架
-    unsigned char *blk; /* A pointer to a block */
-    int i = 0;
-
-    /* Initialize the buffer */
-    if (!initBuffer(520, 64, &buf))
-    {
-        perror("Buffer Initialization Failed!\n");
-        return -1;
-    }
-
-    /* Read the block from the hard disk */
-    blk = getBlockFromDiskToBuf(1, &buf);
-    showBlock(blk);
-
-    sortBlock(blk);
-    showBlock(blk);
-
-    freeBlockInBuffer(blk, &buf);
-
-    // 选择测试
-
-    selectFromRel_linear(40, RELATION_R, 1000);
-
-    selectFromRel_linear(60, RELATION_S, 1100);
-
-    std::cout<<"Empty Blocks: "<<buf.numFreeBlk<<std::endl;
-
-    sortRel(RELATION_R, 1200);
-
-    selectFromRel_Binary(40, 1200, 1215, 1400);
-
-    sortRel(RELATION_S, 1500);
-
-    printIO(&buf);
-    selectFromRel_Binary(60, 1500, 1531, 1700);
-    printIO(&buf);
-
-    printIO(&buf);
-    return 0;
-}
-
-
 class readBlocks{
     /* 读取内存块，专门用来读元组的。
      * 可以指定：
@@ -725,4 +670,58 @@ bool readBlocks::recall() {
     this->block = this->R_device.block;
     this->tuple = this->R_device.tuple;
     return true;
+}
+
+void projection(int rel, int row){
+    // 投影函数，输入待投影的关系和列号
+    // TODO: 完成读取迭代器，完成这个功能
+    return;
+}
+
+void printIO(Buffer *buff){
+    // 打印IO次数
+    std::cout << '\n' << "IO's is " << buff->numIO << std::endl;
+}
+
+int main() {
+    // 以例程为脚手架
+    unsigned char *blk; /* A pointer to a block */
+    int i = 0;
+
+    /* Initialize the buffer */
+    if (!initBuffer(520, 64, &buf))
+    {
+        perror("Buffer Initialization Failed!\n");
+        return -1;
+    }
+
+    /* Read the block from the hard disk */
+    blk = getBlockFromDiskToBuf(1, &buf);
+    showBlock(blk);
+
+    sortBlock(blk);
+    showBlock(blk);
+
+    freeBlockInBuffer(blk, &buf);
+
+    // 选择测试
+
+    selectFromRel_linear(40, RELATION_R, 1000);
+
+    selectFromRel_linear(60, RELATION_S, 1100);
+
+    std::cout<<"Empty Blocks: "<<buf.numFreeBlk<<std::endl;
+
+    sortRel(RELATION_R, 1200);
+
+    selectFromRel_Binary(40, 1200, 1215, 1400);
+
+    sortRel(RELATION_S, 1500);
+
+    printIO(&buf);
+    selectFromRel_Binary(60, 1500, 1531, 1700);
+    printIO(&buf);
+
+    printIO(&buf);
+    return 0;
 }
