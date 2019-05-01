@@ -141,7 +141,7 @@ int fourCharToInt(const void* pt){
 
 inline int getNthTupleY(const void *blk, const int n, const int y){
     // 取得blk中的第n个元组里的第y项。
-    // 0< n <=6, 0< y <=1
+    // 0<= n <=6, 0<= y <=1
     return fourCharToInt((char*)blk + 8 * n + y);
 }
 
@@ -186,7 +186,6 @@ void selectFromRel_linear(int value, int src, int startBlock){
 
 void sortRel(int src, int startBlock){
     // 排序整个关系
-    // TODO: 查错
     int firstBlkNum = 0, lastBlkNum = 0;
     REL_START_END(src,firstBlkNum,lastBlkNum)
     int blkCnt = lastBlkNum-firstBlkNum+1;
@@ -279,6 +278,41 @@ void sortRel(int src, int startBlock){
     delete(writeBlk);
     for (int m = 0; m < segCnt; ++m) {
         freeBlockInBuffer(blk[m], &buf);
+    }
+}
+
+void binarySearch(int val, int relStart, int relEnd, int outputStartBlock){
+    // 二分查找，输入欲查找的值，排好序的关系的起始块号和终止块号，输出结果的起始块号
+    // 将会把结果写到盘里
+    int max, min;
+    unsigned char *maxBlk, *minBlk;
+    auto writeBlk = new writeBufferBlock(&buf, outputStartBlock);
+    for (int i = relStart; i < relEnd; ++i) {
+        // 打开两头块，分别取最小
+        minBlk = getBlockFromDiskToBuf(relEnd, &buf);
+        if(getNthTupleY(minBlk, 0, 0) > val){
+            // 若最小的块也比它大，则认为找不到，开始做清除工作
+            freeBlockInBuffer(minBlk);
+            delete(writeBlk);
+            return;
+        }
+        maxBlk = getBlockFromDiskToBuf(relStart, &buf);
+        if(getNthTupleY(maxBlk, 0, 0) <= val){
+            // 如果最大块里最小的小于或等于val，则先查找这块里的内容
+            for (int j = 0; j < 7; ++j) {
+                if(getNthTupleY(maxBlk, j, 0)==0){
+                    break; // 如果获得空块则停止
+                }
+                if(getNthTupleY(maxBlk, j, 0)==val){
+                    writeBlk->writeOneTuple(maxBlk+8*j);
+                }
+            }
+            delete(writeBlk);
+            freeBlockInBuffer(maxBlk, &buf);
+            freeBlockInBuffer(minBlk, &buf);
+            return;
+        }
+        // TODO: 添加折半相关的逻辑
     }
 }
 
