@@ -281,41 +281,150 @@ void sortRel(int src, int startBlock){
     }
 }
 
-void binarySearch(int val, int relStart, int relEnd, int outputStartBlock){
+void selectFromRel_Binary(int val, int relStart, int relEnd, int outputStartBlock){
     // 二分查找，输入欲查找的值，排好序的关系的起始块号和终止块号，输出结果的起始块号
     // 将会把结果写到盘里
-    int max, min;
-    unsigned char *maxBlk, *minBlk;
+    int startToFind; // 从此块开始找
+    int minN = relStart, maxN = relEnd; // 用来进行二分查找的哨兵指示
+    int foo; // 这个不知道叫什么好，用来存放块的最小值
+    unsigned char *maxBlk=NULL, *minBlk=NULL, *medBlk=NULL, *startToFindBlk=NULL;
     auto writeBlk = new writeBufferBlock(&buf, outputStartBlock);
-    for (int i = relStart; i < relEnd; ++i) {
-        // 打开两头块，分别取最小
-        minBlk = getBlockFromDiskToBuf(relEnd, &buf);
-        if(getNthTupleY(minBlk, 0, 0) > val){
-            // 若最小的块也比它大，则认为找不到，开始做清除工作
-            freeBlockInBuffer(minBlk, &buf);
-            delete(writeBlk);
-            return;
+    while (true) {
+        if(minN == maxN){
+            // 只剩一块，直接开始查找
+            startToFindBlk = maxBlk!=NULL?maxBlk:(minBlk!=NULL?minBlk:getBlockFromDiskToBuf(minN, &buf));
+            startToFind = minN;
+            break;
         }
-        maxBlk = getBlockFromDiskToBuf(relStart, &buf);
-        if(getNthTupleY(maxBlk, 0, 0) <= val){
-            // 如果最大块里最小的小于或等于val，则先查找这块里的内容
-            for (int j = 0; j < 7; ++j) {
-                if(getNthTupleY(maxBlk, j, 0)==0){
-                    break; // 如果获得空块则停止
-                }
-                if(getNthTupleY(maxBlk, j, 0)==val){
-                    writeBlk->writeOneTuple(maxBlk+8*j);
-                }
+        // 打开两头块，分别取最小
+        if(minBlk==NULL){
+            minBlk = getBlockFromDiskToBuf(minN, &buf);
+            foo = getNthTupleY(minBlk, 0, 0);
+            if(foo > val){
+                // 若最小的块也比它大，则认为找不到，开始做清除工作
+                freeBlockInBuffer(minBlk, &buf);
+                delete(writeBlk);
+                return;
             }
-            delete(writeBlk);
+            if(foo == val){
+                // 若最小的值等于val，直接从最小块开始找
+                startToFind = minN;
+                startToFindBlk = minBlk;
+                if(maxBlk!=NULL)freeBlockInBuffer(maxBlk, &buf);
+                break;
+            }
+        }
+
+        if(maxBlk==NULL){
+            maxBlk = getBlockFromDiskToBuf(maxN, &buf);
+            foo = getNthTupleY(maxBlk, 0, 0);
+            if(foo < val){
+                // 如果最大块里最小的小于val，则直接查找这块里的内容
+                startToFind = maxN;
+                startToFindBlk = maxBlk;
+                freeBlockInBuffer(minBlk, &buf);
+                break;
+            }
+            if(foo == val){
+                // 如果最小值等于val，则说明应该从之前的某一块开始找
+                freeBlockInBuffer(minBlk, &buf);
+                for (int j = maxN; j >= minN ; --j) {
+                    freeBlockInBuffer(maxBlk, &buf);
+                    maxBlk = getBlockFromDiskToBuf(j, &buf);
+                    if(getNthTupleY(maxBlk, 0, 0)<val){
+                        startToFind = j;
+                        startToFindBlk = maxBlk;
+                        break;
+                    }
+                }
+                break;
+            }
+        }
+
+        // 如果都不是，那就看中间块的最小值
+        medBlk = getBlockFromDiskToBuf((maxN - minN) / 2 + minN, &buf);
+        foo = getNthTupleY(medBlk, 0, 0);
+        if(foo>val){
+            // 中间块最小的值大于val，说明下一轮应该找前面半截，所以我们改变maxN并释放maxBlk
+            maxN = (maxN - minN) / 2 + minN - 1;
+            freeBlockInBuffer(maxBlk, &buf);
+            freeBlockInBuffer(medBlk, &buf);
+            maxBlk = NULL;
+            continue;
+        }
+        else if(foo<val){
+            // 中间块最小值小于val，就要先检查最大值
+            for (int i = 6; i > 0; --i) {
+                foo = getNthTupleY(medBlk, i, 0);
+                if(foo!=0)break;
+            }
+            // 最大值大于等于val，就命中这块
+            if(foo>=val){
+                startToFind = (maxN - minN) / 2 + minN;
+                startToFindBlk = medBlk;
+                if(maxN!=(maxN - minN) / 2 + minN)freeBlockInBuffer(maxBlk, &buf);
+                if(minN!=(maxN - minN) / 2 + minN)freeBlockInBuffer(minBlk, &buf);
+                break;
+            }
+            // 中间块的最大值也小于val，下一轮应从后半部分开始，故改变minN并变更minBlk
+            if(minN!=(maxN - minN) / 2 + minN){
+                freeBlockInBuffer(minBlk, &buf);
+                minN = (maxN - minN) / 2 + minN;
+            }
+            minBlk = medBlk;
+            continue;
+        }
+        else {
+            // 我们不允许要找的值被截断在两个部分的情形
+            // 当中间的块最小值正好等于要找的值时，我们应该向前找
             freeBlockInBuffer(maxBlk, &buf);
             freeBlockInBuffer(minBlk, &buf);
+            for (int j = (maxN-minN)/2+minN-1; j >= minN ; --j) {
+                freeBlockInBuffer(medBlk, &buf);
+                medBlk = getBlockFromDiskToBuf(j, &buf);
+                if(getNthTupleY(medBlk, 0, 0)<val){
+                    startToFind = j;
+                    startToFindBlk = medBlk;
+                    break;
+                }
+            }
+            break;
+        }
+    }
+    for (int i = startToFind; i <= maxN; ++i) {
+        // 遍历可能的每一块
+        for (int j = 0; j < 7; ++j) {
+            foo = getNthTupleY(startToFindBlk, j, 0);
+            if (foo < val && foo != 0)continue;
+            if (foo == val) {
+                writeBlk->writeOneTuple(startToFindBlk + 8 * j);
+            } else {
+                delete(writeBlk);
+                freeBlockInBuffer(startToFindBlk, &buf);
+                return;
+            }
+        }
+        if (i == maxN){
+            // 读到最后一块，退出
+            delete(writeBlk);
+            freeBlockInBuffer(startToFindBlk, &buf);
             return;
         }
-        // 加上
-        // TODO: 添加折半相关的逻辑
-
+        // 读下一块
+        freeBlockInBuffer(startToFindBlk, &buf);
+        startToFindBlk = getBlockFromDiskToBuf(i + 1, &buf);
     }
+}
+
+void projection(int rel, int row){
+    // 投影函数，输入待投影的关系和列号
+    // TODO: 完成读取迭代器，完成这个功能
+    return;
+}
+
+void printIO(Buffer *buff){
+    // 打印IO次数
+    std::cout << '\n' << "IO's is " << buff->numIO << std::endl;
 }
 
 int main() {
@@ -339,14 +448,281 @@ int main() {
 
     freeBlockInBuffer(blk, &buf);
 
+    // 选择测试
+
     selectFromRel_linear(40, RELATION_R, 1000);
+
     selectFromRel_linear(60, RELATION_S, 1100);
 
     std::cout<<"Empty Blocks: "<<buf.numFreeBlk<<std::endl;
 
     sortRel(RELATION_R, 1200);
-    sortRel(RELATION_S, 1400);
 
-    std::cout << '\n' << "IO's is " << buf.numIO << std::endl;
+    selectFromRel_Binary(40, 1200, 1215, 1400);
+
+    sortRel(RELATION_S, 1500);
+
+    printIO(&buf);
+    selectFromRel_Binary(60, 1500, 1531, 1700);
+    printIO(&buf);
+
+    printIO(&buf);
     return 0;
+}
+
+
+class readBlocks{
+    /* 读取内存块，专门用来读元组的。
+     * 可以指定：
+     *         -这个区域占有内存块的数量
+     *         -能读取的块号范围
+     * 需要维护：
+     *         -其中的内存块和磁盘块的对应关系
+     *         -当前读取到的内存块和块中的位置
+     * 可以进行：
+     *         -读取一条记录，然后指示向后移动
+     *         -读取一条记录，指针不移动
+     *         -要求更换内容，将内存中指针之前的块全部更新
+     *         -持有一个R-device，可以存储某时刻自身的状态，包括内存块和磁盘的对应表，当前指针所在的块和位置，持有的内存在此时的状态
+     *         -从有内容的R-device进行事象回溯
+     */
+public:
+    int memCnt=0; // 持有的内存块数
+    Buffer *buff; // 宿主
+    readBlocks(int startBlk, int endBlk, int memCnt, Buffer *buff);
+    ~readBlocks();
+    unsigned char* getTupleSilent(); // 得到元组地址，指针不动
+    void forward(); // 指针移动一个单位，若无法移动则无事发生
+    unsigned char* getTuple(); // 得到元组地址，指针移动，若无法移动则不移动
+    int getValSilent(int which); // 得到元组中的第which个元素
+    int getVal(int which); // 得到之后还移动
+    bool doSnapshot(); // 存储当前的状态
+    bool recall(); // 还原此前的状态
+    bool refresh(); // 更换指针所在块前面的块
+private:
+    int startBlock=0; // 开始的磁盘块编号
+    int endBlock=0; // 最后一个磁盘块的编号
+    int qFront=0; // 下面两个循环队列的队首号
+    int qEnd=0; // 队尾号
+    bool qForward(); // 队列向前生长
+    inline void qShrink(); // 队列向前收缩
+    inline bool isFront(int n); // 判断n是不是在队列头
+    inline unsigned char*& getNthBlock(int n); // 获得队列中第n个地址
+    inline int& getNthNumber(int n); // 获取队列中第n个块号
+    inline int getNthNumberVal(int n); // 获取队列中第n个块号
+    inline bool toNextBlock(); // 使指针移到下个块，不能移动则返回false
+    int qLength=0; // 队列中拥有的非空块个数
+    unsigned char** memBlocks=NULL; // 持有的内存块地址列表，是循环队列
+    int* blkNums=NULL; // 对应的磁盘块编号，是循环队列
+    int block=0; // 现在扫描到了何块
+    int tuple=0; // 现在扫描到了哪个元组
+    struct {
+        bool hasReflect= false; // 有没有使用R装置储存事象
+//        unsigned char** memBlocks=NULL; // 持有的内存块地址列表
+        int qFront=0; // 下面两个循环队列的队首号
+        int qEnd=0; // 队尾号
+        int qLength=0; // 队列中拥有的非空块个数
+        int* blkNums=NULL; // 对应的磁盘块编号
+        int block=0; // 现在扫描到了何块
+        int tuple=0; // 现在扫描到了哪个元组
+    }R_device; // 存储事象供回溯使用
+    inline bool full(); // 判断队列是否满
+    inline bool empty(); // 判断队列是否空
+//    int* generateSequentalIndices(); // 为队列生成正常顺序的访问下标列表
+    bool loadBlkFromDisc(int blkNum); // 装载一块进入磁盘
+    bool removeLastBlk(); // 移除储存的最后一块
+};
+
+readBlocks::readBlocks(int startBlk, int endBlk, int memCnt, Buffer *buff) {
+    // 生成读取区域。输入开始块编号，结束块编号，持有内存块数，对应缓冲区
+    this->buff = buff;
+    this->memCnt = memCnt;
+    this->blkNums = (int*)malloc(sizeof(int)*memCnt);
+    this->memBlocks = (unsigned char**)malloc(sizeof(unsigned char*)*memCnt);
+    this->R_device.blkNums = (int*)malloc(sizeof(int)*memCnt);
+    bzero(this->memBlocks, sizeof(unsigned char*)*memCnt);
+    bzero(this->R_device.blkNums, sizeof(int)*memCnt);
+    bzero(this->blkNums, sizeof(int)*memCnt);
+//    this->R_device.memBlocks = (unsigned char**)malloc(sizeof(unsigned char*)*memCnt);
+    this->startBlock = startBlk;
+    this->endBlock = endBlk;
+}
+
+bool readBlocks::doSnapshot() {
+    // 做快照
+//    memcpy(this->R_device.memBlocks, this->memBlocks, sizeof(unsigned char*)*memCnt);
+    memcpy(this->R_device.blkNums, this->blkNums, sizeof(int)*memCnt);
+    this->R_device.block = this->block;
+    this->R_device.qEnd = this->qEnd;
+    this->R_device.qFront = this->qFront;
+    this->R_device.qLength = this->qLength;
+    this->R_device.tuple = this->tuple;
+    this->R_device.hasReflect = true;
+    return true;
+}
+
+inline bool readBlocks::toNextBlock() {
+    // 块指针后移1个
+    if(this->isFront(this->block)){
+        int blkNumNow = this->getNthNumberVal(this->block);
+        if(blkNumNow < this->endBlock){
+            if(full())this->qShrink();
+            this->loadBlkFromDisc(blkNumNow+1);
+            return true;
+        } else{
+            return false;
+        }
+    }
+    this->block++;
+    return true;
+}
+
+bool readBlocks::qForward() {
+    // 队首前进
+    if(this->full())return false;
+    this->qFront++;
+    this->qLength++;
+    return true;
+}
+
+inline void readBlocks::qShrink() {
+    // 收缩队列
+    if(this->qFront>this->qEnd){
+        this->qEnd++;
+        this->qLength--;
+    }
+}
+
+inline int& readBlocks::getNthNumber(int n) {
+    // 获得第n个块编号
+    return this->blkNums[(n+this->qEnd)%this->memCnt];
+}
+
+inline int readBlocks::getNthNumberVal(int n) {
+    // 获得第n个块编号
+    return this->blkNums[(n+this->qEnd)%this->memCnt];
+}
+
+inline unsigned char*& readBlocks::getNthBlock(int n) {
+    // 获得第n块
+    return this->memBlocks[(n+this->qEnd)%this->memCnt];
+}
+
+inline bool readBlocks::full(){
+    // 判断是否满
+    return this->qFront - this->qEnd >= this->memCnt-1;
+}
+
+inline bool readBlocks::empty(){
+    // 判断是否空
+    return this->qFront - this->qEnd > 0;
+}
+
+bool readBlocks::loadBlkFromDisc(int blkNum) {
+    // 装载第blkNum块进磁盘，不影响指针，但是不碍事
+    if(!this->qForward())return false;
+    // 先推进队列
+    // 然后装入blkNum块
+    unsigned char*& blk = this->getNthBlock(this->qFront-this->qEnd);
+    int& blkn = this->getNthNumber(this->qFront-this->qEnd);
+    blk = getBlockFromDiskToBuf(blkNum, this->buff);
+    blkn = blkNum;
+    return true;
+}
+
+bool readBlocks::removeLastBlk() {
+    // 删除队尾的一块内存，同时维护指针，保证指针不移动
+    if(this->empty())return false;
+//    if(this->block==0)perror("Read Block is empty now");
+    // 先删队尾
+    freeBlockInBuffer(this->getNthBlock(0), this->buff);
+    // 再缩队列
+    this->qShrink();
+    this->block--; // 维护块指针
+    return true;
+}
+
+inline bool readBlocks::isFront(int n) {
+    // 判断是否已经到队列头
+    return this->qFront - this->qEnd <= n;
+}
+
+void readBlocks::forward() {
+    // 前移指针一个元组
+    if(this->tuple==7){
+        // 若此块满，则要前进一块
+        if(this->toNextBlock())this->tuple=0;
+    }
+    else{
+        // 若没满则直接加
+        if(getNthTupleY(this->getNthBlock(this->block), this->tuple+1, 0)!=0){
+            this->tuple++;
+        }
+    }
+}
+
+unsigned char* readBlocks::getTupleSilent() {
+    // 获得当前元组的地址
+    return (this->getNthBlock(this->block)+this->tuple*8);
+}
+
+unsigned char* readBlocks::getTuple() {
+    // 获得当前元组地址并让地址前进
+    unsigned char* t = this->getTupleSilent();
+    this->forward();
+    return t;
+}
+
+int readBlocks::getValSilent(int which){
+    // 获得元组的第n个值
+    return getNthTupleY(getNthBlock(this->block), this->tuple, which);
+}
+
+int readBlocks::getVal(int which) {
+    // 获得元组的第n个值，然后指针前进
+    int res = this->getValSilent(which);
+    this->forward();
+    return res;
+}
+
+bool readBlocks::refresh() {
+    // 刷新内存区域，尽可能地更换指针之前的块
+    int blkToLoad;
+    for (int i = 0; i < this->memCnt-this->qLength; ++i) {
+        // 首先把剩下的区域填充完
+        blkToLoad = this->getNthNumber(this->qFront-this->qEnd)+1;
+        if(blkToLoad>this->endBlock)break;
+        this->loadBlkFromDisc(blkToLoad);
+    }
+    for (int i = 0; i < this->memCnt; ++i) {
+        // 然后开始尽可能替换块
+        if(this->block==0)break;
+        blkToLoad = this->getNthNumber(this->qFront-this->qEnd)+1;
+        if(blkToLoad>this->endBlock)break;
+        this->removeLastBlk();
+        this->loadBlkFromDisc(blkToLoad);
+    }
+    return true;
+}
+
+bool readBlocks::recall() {
+    // 还原至储存的事象，包含将内存替换掉的工作
+    if(!this->R_device.hasReflect)return false;
+    // 首先来还原内存区域
+    for (int i = this->R_device.qEnd%this->memCnt; i != this->R_device.qFront%this->memCnt+1; ++i) {
+        if(i >= this->memCnt)i=i%memCnt; // 这是个循环队列
+        if(this->R_device.blkNums[i]!=this->blkNums[i]){
+            // 如果不相等则读回此前的块
+            freeBlockInBuffer(this->memBlocks[i], this->buff);
+            this->memBlocks[i] = getBlockFromDiskToBuf(this->R_device.blkNums[i], this->buff);
+        }
+    }
+    // 还原其他的信息
+    this->qEnd = this->R_device.qEnd;
+    this->qFront = this->R_device.qFront;
+    memcpy(this->blkNums, this->R_device.blkNums, sizeof(int)*memCnt);
+    this->qLength = this->R_device.qLength;
+    this->block = this->R_device.block;
+    this->tuple = this->R_device.tuple;
+    return true;
 }
