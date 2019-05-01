@@ -1,4 +1,5 @@
 #include <iostream>
+#include <vector>
 
 // MEM maneuvering
 #include "extmem.h"
@@ -456,24 +457,24 @@ private:
     inline int& getNthNumber(int n); // 获取队列中第n个块号
     inline int getNthNumberVal(int n); // 获取队列中第n个块号
     inline bool toNextBlock(); // 使指针移到下个块，不能移动则返回false
-    int qLength=0; // 队列中拥有的非空块个数
+//    int qLength=0; // 队列中拥有的非空块个数
+    inline int qLength(){// 返回队列长度
+        return (qFront-qEnd+memCnt+1)%(memCnt+1);
+    }
     unsigned char** memBlocks=NULL; // 持有的内存块地址列表，是循环队列
     int* blkNums=NULL; // 对应的磁盘块编号，是循环队列
     int block=0; // 现在扫描到了何块
     int tuple=0; // 现在扫描到了哪个元组
     struct {
         bool hasReflect= false; // 有没有使用R装置储存事象
-//        unsigned char** memBlocks=NULL; // 持有的内存块地址列表
-        int qFront=0; // 下面两个循环队列的队首号，等于新元素将插入的位置?
+        int qFront=0; // 下面两个循环队列的队首号，等于新元素将插入的位置
         int qEnd=0; // 队尾号
-        int qLength=0; // 队列中拥有的非空块个数
         int* blkNums=NULL; // 对应的磁盘块编号
         int block=0; // 现在扫描到了何块
         int tuple=0; // 现在扫描到了哪个元组
     }R_device; // 存储事象供回溯使用
     inline bool full(); // 判断队列是否满
     inline bool empty(); // 判断队列是否空
-//    int* generateSequentalIndices(); // 为队列生成正常顺序的访问下标列表
     bool loadBlkFromDisc(int blkNum); // 装载一块进入磁盘
     bool removeLastBlk(); // 移除储存的最后一块
 };
@@ -482,13 +483,12 @@ readBlocks::readBlocks(int startBlk, int endBlk, int memCnt, Buffer *buff) {
     // 生成读取区域。输入开始块编号，结束块编号，持有内存块数，对应缓冲区
     this->buff = buff;
     this->memCnt = memCnt;
-    this->blkNums = (int*)malloc(sizeof(int)*memCnt);
-    this->memBlocks = (unsigned char**)malloc(sizeof(unsigned char*)*memCnt);
-    this->R_device.blkNums = (int*)malloc(sizeof(int)*memCnt);
-    bzero(this->memBlocks, sizeof(unsigned char*)*memCnt);
-    bzero(this->R_device.blkNums, sizeof(int)*memCnt);
-    bzero(this->blkNums, sizeof(int)*memCnt);
-//    this->R_device.memBlocks = (unsigned char**)malloc(sizeof(unsigned char*)*memCnt);
+    this->blkNums = (int*)malloc(sizeof(int)*memCnt+1);
+    this->memBlocks = (unsigned char**)malloc(sizeof(unsigned char*)*memCnt+1);
+    this->R_device.blkNums = (int*)malloc(sizeof(int)*memCnt+1);
+    bzero(this->memBlocks, sizeof(unsigned char*)*memCnt+1);
+    bzero(this->R_device.blkNums, sizeof(int)*memCnt+1);
+    bzero(this->blkNums, sizeof(int)*memCnt+1);
     this->startBlock = startBlk;
     this->endBlock = endBlk;
     // 装入第一块来开张
@@ -497,12 +497,10 @@ readBlocks::readBlocks(int startBlk, int endBlk, int memCnt, Buffer *buff) {
 
 bool readBlocks::doSnapshot() {
     // 做快照
-//    memcpy(this->R_device.memBlocks, this->memBlocks, sizeof(unsigned char*)*memCnt);
-    memcpy(this->R_device.blkNums, this->blkNums, sizeof(int)*memCnt);
+    memcpy(this->R_device.blkNums, this->blkNums, sizeof(int)*memCnt+1);
     this->R_device.block = this->block;
     this->R_device.qEnd = this->qEnd;
     this->R_device.qFront = this->qFront;
-    this->R_device.qLength = this->qLength;
     this->R_device.tuple = this->tuple;
     this->R_device.hasReflect = true;
     return true;
@@ -531,7 +529,6 @@ bool readBlocks::qForward() {
         return false;
     }
     this->qFront++;
-    this->qLength++;
     return true;
 }
 
@@ -539,52 +536,49 @@ inline void readBlocks::qShrink() {
     // 收缩队列
     if(this->qFront>this->qEnd){
         this->qEnd++;
-        this->qLength--;
     }
 }
 
 inline int& readBlocks::getNthNumber(int n) {
     // 获得第n个块编号
-    return this->blkNums[(n+this->qEnd)%this->memCnt];
+    return this->blkNums[(n+this->qEnd)%(this->memCnt+1)];
 }
 
 inline int readBlocks::getNthNumberVal(int n) {
     // 获得第n个块编号
-    return this->blkNums[(n+this->qEnd)%this->memCnt];
+    return this->blkNums[(n+this->qEnd)%(this->memCnt+1)];
 }
 
 inline unsigned char*& readBlocks::getNthBlock(int n) {
     // 获得第n块
-    return this->memBlocks[(n+this->qEnd)%this->memCnt];
+    return this->memBlocks[(n+this->qEnd)%(this->memCnt+1)];
 }
 
 inline bool readBlocks::full(){
     // 判断是否满
-    if(this->memCnt==1)return false;
-    return this->qFront - this->qEnd >= this->memCnt;
+    return (qFront + 1) % (memCnt + 1) == qEnd;
 }
 
 inline bool readBlocks::empty(){
     // 判断是否空
-    return this->qFront - this->qEnd > 0;
+    return qEnd==qFront;
 }
 
 bool readBlocks::loadBlkFromDisc(int blkNum) {
     // 装载第blkNum块进磁盘，不影响指针，但是不碍事
-    if(!this->qForward())return false;
+    if(full())return false;
     // 先推进队列
     // 然后装入blkNum块
-    unsigned char*& blk = this->getNthBlock(this->qFront-this->qEnd);
-    int& blkn = this->getNthNumber(this->qFront-this->qEnd);
-    blk = getBlockFromDiskToBuf(blkNum, this->buff);
-    blkn = blkNum;
+    this->memBlocks[this->qFront] = getBlockFromDiskToBuf(blkNum, this->buff);
+    this->blkNums[this->qFront] = blkNum;
+    // 更新队首
+    qFront = (qFront+1)%(memCnt+1);
     return true;
 }
 
 bool readBlocks::removeLastBlk() {
     // 删除队尾的一块内存，同时维护指针，保证指针不移动
     if(this->empty())return false;
-//    if(this->block==0)perror("Read Block is empty now");
     // 先删队尾
     freeBlockInBuffer(this->getNthBlock(0), this->buff);
     // 再缩队列
@@ -595,7 +589,7 @@ bool readBlocks::removeLastBlk() {
 
 inline bool readBlocks::isFront(int n) {
     // 判断是否已经到队列头
-    return this->qFront - this->qEnd <= n;
+    return qLength() == n+1;
 }
 
 void readBlocks::forward() {
@@ -660,7 +654,7 @@ bool readBlocks::recall() {
     // 还原至储存的事象，包含将内存替换掉的工作
     if(!this->R_device.hasReflect)return false;
     // 首先来还原内存区域
-    for (int i = this->R_device.qEnd%this->memCnt; i != this->R_device.qFront%this->memCnt+1; ++i) {
+    for (int i = this->R_device.qEnd%(this->memCnt+1); i != this->R_device.qFront%(this->memCnt+1); ++i) {
         if(i >= this->memCnt)i=i%memCnt; // 这是个循环队列
         if(this->R_device.blkNums[i]!=this->blkNums[i]){
             // 如果不相等则读回此前的块
@@ -720,7 +714,7 @@ int main() {
 
     sortRel(RELATION_R, 1200);
 
-    auto readIter = new readBlocks(1200, 1215, 1, &buf);
+    auto readIter = new readBlocks(1200, 1215, 2, &buf);
 
     for (int j = 0; j < 25; ++j) {
         std::cout<<readIter->getVal(0)<<std::endl;
