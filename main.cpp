@@ -292,7 +292,7 @@ void binarySearch(int val, int relStart, int relEnd, int outputStartBlock){
         minBlk = getBlockFromDiskToBuf(relEnd, &buf);
         if(getNthTupleY(minBlk, 0, 0) > val){
             // 若最小的块也比它大，则认为找不到，开始做清除工作
-            freeBlockInBuffer(minBlk);
+            freeBlockInBuffer(minBlk, &buf);
             delete(writeBlk);
             return;
         }
@@ -312,7 +312,9 @@ void binarySearch(int val, int relStart, int relEnd, int outputStartBlock){
             freeBlockInBuffer(minBlk, &buf);
             return;
         }
+        // 加上
         // TODO: 添加折半相关的逻辑
+
     }
 }
 
