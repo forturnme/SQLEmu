@@ -464,7 +464,7 @@ private:
     struct {
         bool hasReflect= false; // 有没有使用R装置储存事象
 //        unsigned char** memBlocks=NULL; // 持有的内存块地址列表
-        int qFront=0; // 下面两个循环队列的队首号
+        int qFront=0; // 下面两个循环队列的队首号，等于新元素将插入的位置?
         int qEnd=0; // 队尾号
         int qLength=0; // 队列中拥有的非空块个数
         int* blkNums=NULL; // 对应的磁盘块编号
@@ -491,6 +491,8 @@ readBlocks::readBlocks(int startBlk, int endBlk, int memCnt, Buffer *buff) {
 //    this->R_device.memBlocks = (unsigned char**)malloc(sizeof(unsigned char*)*memCnt);
     this->startBlock = startBlk;
     this->endBlock = endBlk;
+    // 装入第一块来开张
+    this->loadBlkFromDisc(this->startBlock);
 }
 
 bool readBlocks::doSnapshot() {
@@ -524,7 +526,10 @@ inline bool readBlocks::toNextBlock() {
 
 bool readBlocks::qForward() {
     // 队首前进
-    if(this->full())return false;
+    if(this->full()){
+        perror("ERROR 530");
+        return false;
+    }
     this->qFront++;
     this->qLength++;
     return true;
@@ -555,7 +560,8 @@ inline unsigned char*& readBlocks::getNthBlock(int n) {
 
 inline bool readBlocks::full(){
     // 判断是否满
-    return this->qFront - this->qEnd >= this->memCnt-1;
+    if(this->memCnt==1)return false;
+    return this->qFront - this->qEnd >= this->memCnt;
 }
 
 inline bool readBlocks::empty(){
@@ -594,7 +600,7 @@ inline bool readBlocks::isFront(int n) {
 
 void readBlocks::forward() {
     // 前移指针一个元组
-    if(this->tuple==7){
+    if(this->tuple==6){
         // 若此块满，则要前进一块
         if(this->toNextBlock())this->tuple=0;
     }
@@ -706,21 +712,27 @@ int main() {
 
     // 选择测试
 
-    selectFromRel_linear(40, RELATION_R, 1000);
-
-    selectFromRel_linear(60, RELATION_S, 1100);
+//    selectFromRel_linear(40, RELATION_R, 1000);
+//
+//    selectFromRel_linear(60, RELATION_S, 1100);
 
     std::cout<<"Empty Blocks: "<<buf.numFreeBlk<<std::endl;
 
     sortRel(RELATION_R, 1200);
 
-    selectFromRel_Binary(40, 1200, 1215, 1400);
+    auto readIter = new readBlocks(1200, 1215, 1, &buf);
 
-    sortRel(RELATION_S, 1500);
+    for (int j = 0; j < 25; ++j) {
+        std::cout<<readIter->getVal(0)<<std::endl;
+    }
 
-    printIO(&buf);
-    selectFromRel_Binary(60, 1500, 1531, 1700);
-    printIO(&buf);
+//    selectFromRel_Binary(40, 1200, 1215, 1400);
+
+//    sortRel(RELATION_S, 1500);
+
+//    printIO(&buf);
+//    selectFromRel_Binary(60, 1500, 1531, 1700);
+//    printIO(&buf);
 
     printIO(&buf);
     return 0;
