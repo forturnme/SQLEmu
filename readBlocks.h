@@ -78,11 +78,11 @@ readBlocks::readBlocks(int startBlk, int endBlk, int memCnt, Buffer *buff) {
     this->buff = buff;
     this->memCnt = memCnt;
     this->blkNums = (int*)malloc(sizeof(int)*memCnt+1);
-    this->memBlocks = (unsigned char**)malloc(sizeof(unsigned char*)*memCnt+1);
-    this->R_device.blkNums = (int*)malloc(sizeof(int)*memCnt+1);
-    bzero(this->memBlocks, sizeof(unsigned char*)*memCnt+1);
-    bzero(this->R_device.blkNums, sizeof(int)*memCnt+1);
-    bzero(this->blkNums, sizeof(int)*memCnt+1);
+    this->memBlocks = (unsigned char**)malloc(sizeof(unsigned char*)*(memCnt+1));
+    this->R_device.blkNums = (int*)malloc(sizeof(int)*(memCnt+1));
+    bzero(this->memBlocks, sizeof(unsigned char*)*(memCnt+1));
+    bzero(this->R_device.blkNums, sizeof(int)*(memCnt+1));
+    bzero(this->blkNums, sizeof(int)*(memCnt+1));
     this->startBlock = startBlk;
     this->endBlock = endBlk;
     // 装入第一块来开张
@@ -91,7 +91,7 @@ readBlocks::readBlocks(int startBlk, int endBlk, int memCnt, Buffer *buff) {
 
 bool readBlocks::doSnapshot() {
     // 做快照
-    memcpy(this->R_device.blkNums, this->blkNums, sizeof(int)*memCnt+1);
+    memcpy(this->R_device.blkNums, this->blkNums, sizeof(int)*(memCnt+1));
     this->R_device.block = this->block;
     this->R_device.finish = this->finish;
     this->R_device.qEnd = this->qEnd;
@@ -265,7 +265,7 @@ bool readBlocks::recall() {
     this->qEnd = this->R_device.qEnd;
     this->finish = this->R_device.finish;
     this->qFront = this->R_device.qFront;
-    memcpy(this->blkNums, this->R_device.blkNums, sizeof(int)*memCnt+1);
+    memcpy(this->blkNums, this->R_device.blkNums, sizeof(int)*(memCnt+1));
     this->block = this->R_device.block;
     this->tuple = this->R_device.tuple;
     return true;

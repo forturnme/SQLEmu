@@ -314,13 +314,14 @@ void nestLoopJoin(int blkStartNum){
             sblk = readBlks_S->getTuple();
             if(sblk == NULL)break;
             bzero(wbuf, 13*sizeof(char));
-            memcpy(wbuf, sblk, 8* sizeof(unsigned char));
+            memcpy(wbuf, sblk, 4* sizeof(unsigned char));
+            memcpy(wbuf+8, sblk+4, 4* sizeof(unsigned char));
             // 对每个S值在已经读进来的R找对应关系
             for (int j = 0; j < 7; ++j) {
                 rv0 = getNthTupleY(rblk, j, 0);
                 if(rv0 <= 0) break;
                 if(rv0==sv0){
-                    memcpy(wbuf+8, rblk+j*8+4, 4* sizeof(char));
+                    memcpy(wbuf+4, rblk+j*8+4, 4* sizeof(char));
                     writeBlk->writeOneLongTuple((unsigned char*)wbuf);
                 }
             }
@@ -328,6 +329,50 @@ void nestLoopJoin(int blkStartNum){
         freeBlockInBuffer(rblk, &buf);
         delete(readBlks_S);
     }
+    delete(writeBlk);
+}
+
+void sortMergeJoin(int startBlk){
+    // 排序链接
+    sortRel(RELATION_R, 10000);
+    sortRel(RELATION_S, 10020);
+    auto readBlkR = new readBlocks(10000, 10015, 1, &buf);
+    auto readBlkS = new readBlocks(10020, 10051, 6, &buf);
+    auto writeBlk = new writeBufferBlock(&buf, startBlk);
+    char wbuf[13] = {0};// 写入缓存
+    int probe = 0; // 目前扫视的值
+    int sval;
+    unsigned char* rblk;
+    // 以R为外，S为内，对R的每个值进行连接
+    while (true){
+        if(readBlkR->getValSilent(0)!=probe){
+            // 扫描到新的R值，则更新探针以及刷新S的内存，将此位置记录
+            probe = readBlkR->getValSilent(0);
+            readBlkS->refresh(); // 将6块更新为未扫描的
+            readBlkS->doSnapshot();
+        } else readBlkS->recall(); // 回到之前更新探针的值
+        // 获得新的R元组
+        rblk = readBlkR->getTuple(); // 此时R已经前进了
+        if(rblk==NULL){
+            break;
+        }
+        bzero(wbuf, 13* sizeof(char));
+        memcpy(wbuf, rblk, 8* sizeof(unsigned char));
+        while (true) {
+            // 开始检查S中的元组，直到第一个大于探针的值出现为止
+            sval = readBlkS->getValSilent(0);
+            if(sval > probe)break;
+            if(sval == probe){
+                memcpy(wbuf+8, readBlkS->getTupleSilent()+4, 4* sizeof(char));
+                writeBlk->writeOneLongTuple((unsigned char*)wbuf);
+            }
+            if(readBlkS->getTuple()==NULL){
+                break;
+            } // 此时S已经前进了
+        }
+    }
+    delete(readBlkR);
+    delete(readBlkS);
     delete(writeBlk);
 }
 
@@ -359,7 +404,8 @@ int main() {
 
     std::cout<<"Empty Blocks: "<<buf.numFreeBlk<<std::endl;
 
-    nestLoopJoin(1800);
+//    nestLoopJoin(1800);
+    sortMergeJoin(1900);
 //
 //    projection(RELATION_S, 0, 1700);
 
@@ -371,7 +417,7 @@ int main() {
 //    readIter->refresh();
 //    std::cout<<"Empty Blocks: "<<buf.numFreeBlk<<std::endl;
 //
-////
+
 //    for (int j = 0; j < 24; ++j) {
 //        if(j==3) readIter->doSnapshot();
 //        if(j==15) readIter->recall();
