@@ -2,8 +2,6 @@
 
 // MEM maneuvering
 #include "util.h"
-//#include "extmem.h"
-//#include "extmem.c"
 #include "readBlocks.h"
 #include "writeBlock.h"
 
@@ -11,9 +9,6 @@
 #include "predefined.h"
 #include "bpt.h"
 #include "bpt.cc"
-
-//#include "math.h"
-//#include "assert.h"
 
 #define RELATION_R 0
 #define RELATION_S 1
