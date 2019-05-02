@@ -3,6 +3,10 @@
 #include "extmem.c"
 /*一些不知道往哪放的工具函数*/
 
+#pragma once
+
+Buffer buf; /* A buffer */
+
 inline void bzero(void *pt, size_t size){
     memset(pt, 0, size);
 }

@@ -1,8 +1,9 @@
 #include <iostream>
 
 // MEM maneuvering
-#include "extmem.h"
-#include "extmem.c"
+#include "util.h"
+//#include "extmem.h"
+//#include "extmem.c"
 #include "readBlocks.h"
 #include "writeBlock.h"
 
@@ -20,7 +21,6 @@
 #define REL_START_END(src, firstBlkNum, lastBlkNum) switch(src){case 0:firstBlkNum = 1;lastBlkNum = 16;break;case 1:firstBlkNum = 20;lastBlkNum = 51;break;default:return;}
 #define REL_FIRST_VALUE_VALID(src, value) switch(src){case 0:if(value<1||value>40)return;break;case 1:if(value<20||value>60)return;break;default:return;}
 
-Buffer buf; /* A buffer */
 
 void selectFromRel_linear(int value, int src, int startBlock){
     // 从r或s选出前一个属性为对应值的元组，线性选择，naive
