@@ -34,6 +34,7 @@ public:
     bool doSnapshot(); // 存储当前的状态
     bool recall(); // 还原此前的状态
     bool refresh(); // 更换指针所在块前面的块
+    bool end();
 private:
     bool finish= false; // 是否读到最后一项
     int startBlock=0; // 开始的磁盘块编号
@@ -200,6 +201,15 @@ bool readBlocks::forward() {
         else this->finish = true;
     }
     return true;
+}
+
+bool readBlocks::end() {
+    // 如果到达最后则返回true
+    if(this->getNthNumberVal(this->block)==this->endBlock){
+        if(this->tuple==6)return true;
+        if(getNthTupleY(this->getNthBlock(this->block), this->tuple+1, 0)==0)return true;
+    }
+    return false;
 }
 
 unsigned char* readBlocks::getTupleSilent() {

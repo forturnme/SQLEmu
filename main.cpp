@@ -453,25 +453,118 @@ void doDiff(int startBlk, int mode, bool sorted){
         } else readBlkS->recall(); // 回到之前更新探针的值
         // 获得新的R元组
         rval1 = readBlkR->getValSilent(1);
-        rblk = readBlkR->getTuple(); // 此时R已经前进了
-        if(rblk==NULL){
-            break;
-        }
+        rblk = readBlkR->getTupleSilent();
         same = false;
         while (true) {
             // 开始检查S中的元组，直到第一个大于探针的值出现为止
             sval = readBlkS->getValSilent(0);
+//            if(rval1==606)for(int m=0;m<8;m++)std::putchar(*(rblk+m));
             if(sval > probe)break;
             if(sval == probe&&rval1==readBlkS->getValSilent(1)){
                 // 如果没有一样的就写
                 same = true;
                 break;
             }
+            if(readBlkS->end())break;
+            readBlkS->forward();
+        }
+        if(!same)writeBlk->writeOneTuple(rblk);
+        if(readBlkR->end())break;
+        readBlkR->forward();
+    }
+    delete(readBlkR);
+    delete(readBlkS);
+    delete(writeBlk);
+}
+
+void doUnion(int startBlk, bool sorted){
+    // 交运算，实际上此步偷懒了，直接两个差加一个并，毫无复用性^_^
+    if(!sorted){
+        // 没排过序就排一次
+        sortRel(RELATION_R, 10000);
+        sortRel(RELATION_S, 10020);
+    }
+    readBlocks* readBlkR;
+    readBlocks* readBlkS;
+    auto writeBlk = new writeBufferBlock(&buf, startBlk);
+    int probe; // 目前扫视的值
+    int sval, rval1;
+    unsigned char* rblk;
+    bool same;
+    // 做两次差，屑操作
+    for(int i = 0; i < 2; i++){
+        if(i==0){
+            readBlkR = new readBlocks(10000, 10015, 1, &buf);
+            readBlkS = new readBlocks(10020, 10051, 6, &buf);
+        } else{
+            readBlkR = new readBlocks(10020, 10051, 1, &buf);
+            readBlkS = new readBlocks(10000, 10015, 6, &buf);
+        }
+        // 以R为外，S为内，对R的每个值进行连接
+        probe = 0;
+        while (true){
+            if(readBlkR->getValSilent(0)!=probe){
+                // 扫描到新的R值，则更新探针以及刷新S的内存，将此位置记录
+                probe = readBlkR->getValSilent(0);
+                readBlkS->refresh(); // 将6块更新为未扫描的
+                readBlkS->doSnapshot();
+            } else readBlkS->recall(); // 回到之前更新探针的值
+            // 获得新的R元组
+            rval1 = readBlkR->getValSilent(1);
+            rblk = readBlkR->getTuple(); // 此时R已经前进了
+            if(rblk==NULL){
+                break;
+            }
+            same = false;
+            while (true) {
+                // 开始检查S中的元组，直到第一个大于探针的值出现为止
+                sval = readBlkS->getValSilent(0);
+                if(sval > probe)break;
+                if(sval == probe&&rval1==readBlkS->getValSilent(1)){
+                    // 如果没有一样的就写
+                    same = true;
+                    break;
+                }
+                if(readBlkS->getTuple()==NULL){
+                    break;
+                } // 此时S已经前进了
+            }
+            if(!same)writeBlk->writeOneTuple(rblk);
+        }
+        delete(readBlkR);
+        delete(readBlkS);
+        std::cout<<"ok1"<<std::endl;
+    }
+    // 做一次交，屑操作再临
+    probe = 0;
+    readBlkR = new readBlocks(10000, 10015, 1, &buf);
+    readBlkS = new readBlocks(10020, 10051, 6, &buf);
+    while (true){
+        if(readBlkR->getValSilent(0)!=probe){
+            // 扫描到新的R值，则更新探针以及刷新S的内存，将此位置记录
+            probe = readBlkR->getValSilent(0);
+            readBlkS->refresh(); // 将6块更新为未扫描的
+            readBlkS->doSnapshot();
+        } else readBlkS->recall(); // 回到之前更新探针的值
+        // 获得新的R元组
+        rval1 = readBlkR->getValSilent(1);
+        rblk = readBlkR->getTuple(); // 此时R已经前进了
+        if(rblk==NULL){
+            break;
+        }
+        while (true) {
+            // 开始检查S中的元组，直到第一个大于探针的值出现为止
+            sval = readBlkS->getValSilent(0);
+            if(sval > probe)break;
+            if(sval==probe&&rval1==readBlkS->getValSilent(1)){
+                // 如果有一样的就写
+                writeBlk->writeOneTuple(rblk);
+                break;
+            }
             if(readBlkS->getTuple()==NULL){
                 break;
             } // 此时S已经前进了
         }
-        if(!same)writeBlk->writeOneTuple(rblk);
     }
     delete(readBlkR);
     delete(readBlkS);
@@ -510,7 +603,20 @@ int main() {
 //    sortMergeJoin(1900);
 //
 //    doIntersection(2000);
+// TODO: 修改diff和union，修复s-r结果重复的问题
     doDiff(2100, 1, false);
+
+    auto read = new readBlocks(2100, 2131, 7, &buf);
+    char bar[5] = {0};
+    for(unsigned char* i=read->getTuple();i!=NULL;i=read->getTuple()){
+        bzero(bar, 5*sizeof(char));
+        memcpy(bar, i, 4* sizeof(char));
+        printf("%s\t", bar);
+        bzero(bar, 5*sizeof(char));
+        memcpy(bar, i+4, 4* sizeof(char));
+        printf("%s\n", bar);
+    }
+//    doUnion(2100, false);
 //    projection(RELATION_S, 0, 1700);
 
 //    sortRel(RELATION_R, 1200);
