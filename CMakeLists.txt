@@ -3,4 +3,4 @@ project(SQLEmu)
 
 set(CMAKE_CXX_STANDARD 17)
 
-add_executable(SQLEmu main.cpp)
+add_executable(SQLEmu main.cpp readBlocks.h writeBlock.h)

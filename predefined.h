@@ -3,10 +3,6 @@
 
 #include <string.h>
 
-inline void bzero(void *pt, size_t size){
-    memset(pt, 0, size);
-}
-
 namespace bpt {
 
 /* predefined B+ info */
