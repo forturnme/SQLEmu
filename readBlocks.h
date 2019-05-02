@@ -27,7 +27,7 @@ public:
     readBlocks(int startBlk, int endBlk, int memCnt, Buffer *buff);
     ~readBlocks();
     unsigned char* getTupleSilent(); // 得到元组地址，指针不动
-    void forward(); // 指针移动一个单位，若无法移动则无事发生
+    bool forward(); // 指针移动一个单位，若无法移动则无事发生并返回false
     unsigned char* getTuple(); // 得到元组地址，指针移动，若无法移动则不移动
     int getValSilent(int which); // 得到元组中的第which个元素
     int getVal(int which); // 得到之后还移动
@@ -35,6 +35,7 @@ public:
     bool recall(); // 还原此前的状态
     bool refresh(); // 更换指针所在块前面的块
 private:
+    bool finish= false; // 是否读到最后一项
     int startBlock=0; // 开始的磁盘块编号
     int endBlock=0; // 最后一个磁盘块的编号
     int qFront=0; // 下面两个循环队列的队首号
@@ -58,6 +59,7 @@ private:
     int block=0; // 现在扫描到了何块
     int tuple=0; // 现在扫描到了哪个元组
     struct {
+        bool finish=false;
         bool hasReflect= false; // 有没有使用R装置储存事象
         int qFront=0; // 下面两个循环队列的队首号，等于新元素将插入的位置
         int qEnd=0; // 队尾号
@@ -91,6 +93,7 @@ bool readBlocks::doSnapshot() {
     // 做快照
     memcpy(this->R_device.blkNums, this->blkNums, sizeof(int)*memCnt+1);
     this->R_device.block = this->block;
+    this->R_device.finish = this->finish;
     this->R_device.qEnd = this->qEnd;
     this->R_device.qFront = this->qFront;
     this->R_device.tuple = this->tuple;
@@ -180,18 +183,23 @@ inline bool readBlocks::isFront(int n) {
     return this->qLength() == n+1;
 }
 
-void readBlocks::forward() {
+bool readBlocks::forward() {
     // 前移指针一个元组
+    // 如果到达最后则返回false
+    if(this->finish)return false;
     if(this->tuple==6){
         // 若此块满，则要前进一块
         if(this->toNextBlock())this->tuple=0;
+        else this->finish = true;
     }
     else{
         // 若没满则直接加
         if(getNthTupleY(this->getNthBlock(this->block), this->tuple+1, 0)!=0){
             this->tuple++;
         }
+        else this->finish = true;
     }
+    return true;
 }
 
 unsigned char* readBlocks::getTupleSilent() {
@@ -202,8 +210,7 @@ unsigned char* readBlocks::getTupleSilent() {
 unsigned char* readBlocks::getTuple() {
     // 获得当前元组地址并让地址前进
     unsigned char* t = this->getTupleSilent();
-    this->forward();
-    return t;
+    return this->forward()?t:NULL;
 }
 
 int readBlocks::getValSilent(int which){
@@ -214,8 +221,7 @@ int readBlocks::getValSilent(int which){
 int readBlocks::getVal(int which) {
     // 获得元组的第n个值，然后指针前进
     int res = this->getValSilent(which);
-    this->forward();
-    return res;
+    return this->forward()?res:-1;
 }
 
 bool readBlocks::refresh() {
@@ -257,6 +263,7 @@ bool readBlocks::recall() {
     }
     // 还原其他的信息
     this->qEnd = this->R_device.qEnd;
+    this->finish = this->R_device.finish;
     this->qFront = this->R_device.qFront;
     memcpy(this->blkNums, this->R_device.blkNums, sizeof(int)*memCnt+1);
     this->block = this->R_device.block;

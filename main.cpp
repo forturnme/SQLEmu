@@ -269,10 +269,27 @@ void selectFromRel_Binary(int val, int relStart, int relEnd, int outputStartBloc
     }
 }
 
-void projection(int rel, int row){
-    // 投影函数，输入待投影的关系和列号
-    // TODO: 完成读取迭代器，完成这个功能
-    return;
+void projection(int rel, int row, int blkStartNum){
+    // 投影函数，输入待投影的关系和列号、结果的起始编号
+    int firstBlkNum = 0, lastBlkNum = 0;
+    REL_START_END(rel,firstBlkNum,lastBlkNum)
+    auto readBlk = new readBlocks(firstBlkNum, lastBlkNum, 7, &buf);
+    auto writeBlk = new writeBufferBlock(&buf, blkStartNum);
+    char writeLn[9] = {0};
+    int counter = 0;
+    // 开始投影一列
+    for (int i = readBlk->getVal(row); i != -1 ; i = readBlk->getVal(row)) {
+        if(counter%2==0&&counter!=0){
+            // 满两个写一次
+            writeBlk->writeOneTuple((unsigned char*)writeLn);
+            bzero(writeLn, 9* sizeof(char));
+        }
+        itoa(i, counter%2==1?writeLn+4:writeLn, 10);
+        counter++;
+    }
+    if(counter)writeBlk->writeOneTuple((unsigned char*)writeLn); // 需要再加一次
+    delete(readBlk);
+    delete(writeBlk);
 }
 
 int main() {
@@ -303,22 +320,24 @@ int main() {
 
     std::cout<<"Empty Blocks: "<<buf.numFreeBlk<<std::endl;
 
+    projection(RELATION_S, 0, 1700);
+
 //    sortRel(RELATION_R, 1200);
-    sortRel(RELATION_S, 1400);
+//    sortRel(RELATION_S, 1400);
 
-    auto readIter = new readBlocks(1400, 1431, 6, &buf);
-    std::cout<<"Empty Blocks: "<<buf.numFreeBlk<<std::endl;
-
-    for (int j = 0; j < 24; ++j) {
-        if(j==3) readIter->doSnapshot();
-        if(j==15) readIter->recall();
-        std::cout<<readIter->getVal(0)<<std::endl;
-    }
-
-    std::cout<<"Empty Blocks: "<<buf.numFreeBlk<<std::endl;
-    readIter->refresh();
-    delete readIter;
-    std::cout<<"Empty Blocks: "<<buf.numFreeBlk<<std::endl;
+//    auto readIter = new readBlocks(1400, 1431, 6, &buf);
+//    std::cout<<"Empty Blocks: "<<buf.numFreeBlk<<std::endl;
+//
+//    for (int j = 0; j < 24; ++j) {
+//        if(j==3) readIter->doSnapshot();
+//        if(j==15) readIter->recall();
+//        std::cout<<readIter->getVal(0)<<std::endl;
+//    }
+//
+//    std::cout<<"Empty Blocks: "<<buf.numFreeBlk<<std::endl;
+//    readIter->refresh();
+//    delete readIter;
+//    std::cout<<"Empty Blocks: "<<buf.numFreeBlk<<std::endl;
 
 //    selectFromRel_Binary(40, 1200, 1215, 1400);
 
