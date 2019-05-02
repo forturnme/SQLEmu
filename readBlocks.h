@@ -245,13 +245,15 @@ bool readBlocks::recall() {
     // 首先来还原内存区域
     int index;
     int preLength = (this->R_device.qFront-this->R_device.qEnd+memCnt+1)%(memCnt+1);
-    for (int i = 0; i < preLength; ++i) {
+    int nowLength = this->qLength();
+    for (int i = 0; i < memCnt; ++i) {
         index = (i+this->R_device.qEnd)%(memCnt+1);
-        if(this->R_device.blkNums[index]!=this->blkNums[index]){
+        if(this->R_device.blkNums[index]!=this->blkNums[index]&&i<preLength){
             // 如果不相等则读回此前的块
             freeBlockInBuffer(this->memBlocks[index], this->buff);
             this->memBlocks[index] = getBlockFromDiskToBuf(this->R_device.blkNums[index], this->buff);
         }
+        if(i>=preLength&&i<nowLength)freeBlockInBuffer(this->memBlocks[index], this->buff); // 删除之前没有使用的块
     }
     // 还原其他的信息
     this->qEnd = this->R_device.qEnd;
@@ -262,5 +264,15 @@ bool readBlocks::recall() {
     return true;
 }
 
+readBlocks::~readBlocks() {
+    // 释放全部持有的内存块
+    int lim = this->qLength();
+    for (int i = 0; i < qLength(); ++i) {
+        freeBlockInBuffer(this->getNthBlock(i), this->buff);
+    }
+    free(this->blkNums);
+    free(this->memBlocks);
+    if(this->R_device.hasReflect)free(this->R_device.blkNums);
+}
 
 #endif //SQLEMU_READBLOCKS_H

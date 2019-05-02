@@ -307,12 +307,18 @@ int main() {
     sortRel(RELATION_S, 1400);
 
     auto readIter = new readBlocks(1400, 1431, 6, &buf);
+    std::cout<<"Empty Blocks: "<<buf.numFreeBlk<<std::endl;
 
     for (int j = 0; j < 24; ++j) {
         if(j==3) readIter->doSnapshot();
         if(j==15) readIter->recall();
         std::cout<<readIter->getVal(0)<<std::endl;
     }
+
+    std::cout<<"Empty Blocks: "<<buf.numFreeBlk<<std::endl;
+    readIter->refresh();
+    delete readIter;
+    std::cout<<"Empty Blocks: "<<buf.numFreeBlk<<std::endl;
 
 //    selectFromRel_Binary(40, 1200, 1215, 1400);
 
