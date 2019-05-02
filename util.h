@@ -87,7 +87,7 @@ int fourCharToInt(const void* pt){
 inline int getNthTupleY(const void *blk, const int n, const int y){
     // 取得blk中的第n个元组里的第y项。
     // 0<= n <=6, 0<= y <=1
-    return fourCharToInt((char*)blk + 8 * n + y);
+    return fourCharToInt((char*)blk + 8 * n + y * 4);
 }
 
 inline void swapTuples(const unsigned char* blk, int t1, int t2){

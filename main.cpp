@@ -376,6 +376,108 @@ void sortMergeJoin(int startBlk){
     delete(writeBlk);
 }
 
+// TODO: Hash Join and B+ Tree indexing
+
+void doIntersection(int startBlk){
+    // 求交，从Sort-Merge-Join改过来的
+    sortRel(RELATION_R, 10000);
+    sortRel(RELATION_S, 10020);
+    auto readBlkR = new readBlocks(10000, 10015, 1, &buf);
+    auto readBlkS = new readBlocks(10020, 10051, 6, &buf);
+    auto writeBlk = new writeBufferBlock(&buf, startBlk);
+    int probe = 0; // 目前扫视的值
+    int sval, rval1;
+    unsigned char* rblk;
+    // 以R为外，S为内，对R的每个值进行连接
+    while (true){
+        if(readBlkR->getValSilent(0)!=probe){
+            // 扫描到新的R值，则更新探针以及刷新S的内存，将此位置记录
+            probe = readBlkR->getValSilent(0);
+            readBlkS->refresh(); // 将6块更新为未扫描的
+            readBlkS->doSnapshot();
+        } else readBlkS->recall(); // 回到之前更新探针的值
+        // 获得新的R元组
+        rval1 = readBlkR->getValSilent(1);
+        rblk = readBlkR->getTuple(); // 此时R已经前进了
+        if(rblk==NULL){
+            break;
+        }
+        while (true) {
+            // 开始检查S中的元组，直到第一个大于探针的值出现为止
+            sval = readBlkS->getValSilent(0);
+            if(sval > probe)break;
+            if(sval==probe&&rval1==readBlkS->getValSilent(1)){
+                // 如果有一样的就写
+                writeBlk->writeOneTuple(rblk);
+                break;
+            }
+            if(readBlkS->getTuple()==NULL){
+                break;
+            } // 此时S已经前进了
+        }
+    }
+    delete(readBlkR);
+    delete(readBlkS);
+    delete(writeBlk);
+}
+
+void doDiff(int startBlk, int mode, bool sorted){
+    // 求差，从求交改过来的
+    // mode为0表示R-S，为1表示S-R
+    if(!sorted){
+        // 没排过序就排一次
+        sortRel(RELATION_R, 10000);
+        sortRel(RELATION_S, 10020);
+    }
+    readBlocks* readBlkR;
+    readBlocks* readBlkS;
+    if(mode==0){
+        readBlkR = new readBlocks(10000, 10015, 1, &buf);
+        readBlkS = new readBlocks(10020, 10051, 6, &buf);
+    }else{
+        readBlkR = new readBlocks(10020, 10051, 1, &buf);
+        readBlkS = new readBlocks(10000, 10015, 6, &buf);
+    }
+    auto writeBlk = new writeBufferBlock(&buf, startBlk);
+    int probe = 0; // 目前扫视的值
+    int sval, rval1;
+    unsigned char* rblk;
+    bool same;
+    // 以R为外，S为内，对R的每个值进行连接
+    while (true){
+        if(readBlkR->getValSilent(0)!=probe){
+            // 扫描到新的R值，则更新探针以及刷新S的内存，将此位置记录
+            probe = readBlkR->getValSilent(0);
+            readBlkS->refresh(); // 将6块更新为未扫描的
+            readBlkS->doSnapshot();
+        } else readBlkS->recall(); // 回到之前更新探针的值
+        // 获得新的R元组
+        rval1 = readBlkR->getValSilent(1);
+        rblk = readBlkR->getTuple(); // 此时R已经前进了
+        if(rblk==NULL){
+            break;
+        }
+        same = false;
+        while (true) {
+            // 开始检查S中的元组，直到第一个大于探针的值出现为止
+            sval = readBlkS->getValSilent(0);
+            if(sval > probe)break;
+            if(sval == probe&&rval1==readBlkS->getValSilent(1)){
+                // 如果没有一样的就写
+                same = true;
+                break;
+            }
+            if(readBlkS->getTuple()==NULL){
+                break;
+            } // 此时S已经前进了
+        }
+        if(!same)writeBlk->writeOneTuple(rblk);
+    }
+    delete(readBlkR);
+    delete(readBlkS);
+    delete(writeBlk);
+}
+
 int main() {
     // 以例程为脚手架
     unsigned char *blk; /* A pointer to a block */
@@ -405,8 +507,10 @@ int main() {
     std::cout<<"Empty Blocks: "<<buf.numFreeBlk<<std::endl;
 
 //    nestLoopJoin(1800);
-    sortMergeJoin(1900);
+//    sortMergeJoin(1900);
 //
+//    doIntersection(2000);
+    doDiff(2100, 1, false);
 //    projection(RELATION_S, 0, 1700);
 
 //    sortRel(RELATION_R, 1200);
