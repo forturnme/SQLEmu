@@ -451,6 +451,9 @@ private:
     int qFront=0; // 下面两个循环队列的队首号
     int qEnd=0; // 队尾号
     bool qForward(); // 队列向前生长
+    inline int qIndex(int n){ // 返回第n项对应的真实下标
+        return (qEnd+n)%(memCnt+1);
+    }
     inline void qShrink(); // 队列向前收缩
     inline bool isFront(int n); // 判断n是不是在队列头
     inline unsigned char*& getNthBlock(int n); // 获得队列中第n个地址
@@ -510,13 +513,9 @@ inline bool readBlocks::toNextBlock() {
     // 块指针后移1个
     if(this->isFront(this->block)){
         int blkNumNow = this->getNthNumberVal(this->block);
-        if(blkNumNow < this->endBlock){
-            if(full())this->qShrink();
-            this->loadBlkFromDisc(blkNumNow+1);
-            return true;
-        } else{
-            return false;
-        }
+        if(blkNumNow >= this->endBlock) return false;
+        if(full())this->removeLastBlk();
+        this->loadBlkFromDisc(blkNumNow+1);
     }
     this->block++;
     return true;
@@ -528,14 +527,14 @@ bool readBlocks::qForward() {
         perror("ERROR 530");
         return false;
     }
-    this->qFront++;
+    qFront = (qFront+1)%(memCnt+1);
     return true;
 }
 
 inline void readBlocks::qShrink() {
     // 收缩队列
-    if(this->qFront>this->qEnd){
-        this->qEnd++;
+    if(!empty()){
+        this->qEnd=(qEnd+1)%(memCnt+1);
     }
 }
 
@@ -572,7 +571,7 @@ bool readBlocks::loadBlkFromDisc(int blkNum) {
     this->memBlocks[this->qFront] = getBlockFromDiskToBuf(blkNum, this->buff);
     this->blkNums[this->qFront] = blkNum;
     // 更新队首
-    qFront = (qFront+1)%(memCnt+1);
+    this->qForward();
     return true;
 }
 
@@ -589,7 +588,7 @@ bool readBlocks::removeLastBlk() {
 
 inline bool readBlocks::isFront(int n) {
     // 判断是否已经到队列头
-    return qLength() == n+1;
+    return this->qLength() == n+1;
 }
 
 void readBlocks::forward() {
@@ -633,16 +632,17 @@ int readBlocks::getVal(int which) {
 bool readBlocks::refresh() {
     // 刷新内存区域，尽可能地更换指针之前的块
     int blkToLoad;
-    for (int i = 0; i < this->memCnt-this->qLength; ++i) {
+    int lim = this->memCnt-this->qLength();
+    for (int i = 0; i < lim; ++i) {
         // 首先把剩下的区域填充完
-        blkToLoad = this->getNthNumber(this->qFront-this->qEnd)+1;
+        blkToLoad = this->getNthNumber(this->qLength()-1)+1;
         if(blkToLoad>this->endBlock)break;
         this->loadBlkFromDisc(blkToLoad);
     }
     for (int i = 0; i < this->memCnt; ++i) {
         // 然后开始尽可能替换块
         if(this->block==0)break;
-        blkToLoad = this->getNthNumber(this->qFront-this->qEnd)+1;
+        blkToLoad = this->getNthNumber(this->qLength()-1)+1;
         if(blkToLoad>this->endBlock)break;
         this->removeLastBlk();
         this->loadBlkFromDisc(blkToLoad);
@@ -654,19 +654,20 @@ bool readBlocks::recall() {
     // 还原至储存的事象，包含将内存替换掉的工作
     if(!this->R_device.hasReflect)return false;
     // 首先来还原内存区域
-    for (int i = this->R_device.qEnd%(this->memCnt+1); i != this->R_device.qFront%(this->memCnt+1); ++i) {
-        if(i >= this->memCnt)i=i%memCnt; // 这是个循环队列
-        if(this->R_device.blkNums[i]!=this->blkNums[i]){
+    int index;
+    int preLength = (this->R_device.qFront-this->R_device.qEnd+memCnt+1)%(memCnt+1);
+    for (int i = 0; i < preLength; ++i) {
+        index = (i+this->R_device.qEnd)%(memCnt+1);
+        if(this->R_device.blkNums[index]!=this->blkNums[index]){
             // 如果不相等则读回此前的块
-            freeBlockInBuffer(this->memBlocks[i], this->buff);
-            this->memBlocks[i] = getBlockFromDiskToBuf(this->R_device.blkNums[i], this->buff);
+            freeBlockInBuffer(this->memBlocks[index], this->buff);
+            this->memBlocks[index] = getBlockFromDiskToBuf(this->R_device.blkNums[index], this->buff);
         }
     }
     // 还原其他的信息
     this->qEnd = this->R_device.qEnd;
     this->qFront = this->R_device.qFront;
-    memcpy(this->blkNums, this->R_device.blkNums, sizeof(int)*memCnt);
-    this->qLength = this->R_device.qLength;
+    memcpy(this->blkNums, this->R_device.blkNums, sizeof(int)*memCnt+1);
     this->block = this->R_device.block;
     this->tuple = this->R_device.tuple;
     return true;
@@ -712,11 +713,14 @@ int main() {
 
     std::cout<<"Empty Blocks: "<<buf.numFreeBlk<<std::endl;
 
-    sortRel(RELATION_R, 1200);
+//    sortRel(RELATION_R, 1200);
+    sortRel(RELATION_S, 1400);
 
-    auto readIter = new readBlocks(1200, 1215, 2, &buf);
+    auto readIter = new readBlocks(1400, 1431, 6, &buf);
 
-    for (int j = 0; j < 25; ++j) {
+    for (int j = 0; j < 24; ++j) {
+        if(j==3) readIter->doSnapshot();
+        if(j==15) readIter->recall();
         std::cout<<readIter->getVal(0)<<std::endl;
     }
 
