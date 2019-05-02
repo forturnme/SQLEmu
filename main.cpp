@@ -301,11 +301,33 @@ void destinct(int relStart ,int relEnd, int blkStartNum){
 void nestLoopJoin(int blkStartNum){
     // 简单的连接算法
     auto writeBlk = new writeBufferBlock(&buf, blkStartNum);
-    auto readBlks_S = new readBlocks(20, 51, 6, &buf);
-    auto readBlks_R = new readBlocks(1, 16, 1, &buf);
-    readBlks_R->refresh(); // 填满R的磁盘块
     char wbuf[13] = {0};// 写入缓存
-    // TODO: 手工forward，不损坏R中存储的块的情况下完成S的连接
+    unsigned char* rblk, *sblk; // R块的地址
+    int rv0; // R的首个值
+    int sv0; // S的首个值
+    for(int i=1;i<17;i++){
+        // 依次装入r的块
+        rblk = getBlockFromDiskToBuf(i, &buf);
+        auto readBlks_S = new readBlocks(20, 51, 6, &buf);
+        while(true){
+            sv0 = readBlks_S->getValSilent(0);
+            sblk = readBlks_S->getTuple();
+            if(sblk == NULL)break;
+            bzero(wbuf, 13*sizeof(char));
+            memcpy(wbuf, sblk, 8* sizeof(unsigned char));
+            // 对每个S值在已经读进来的R找对应关系
+            for (int j = 0; j < 7; ++j) {
+                rv0 = getNthTupleY(rblk, j, 0);
+                if(rv0 <= 0) break;
+                if(rv0==sv0){
+                    memcpy(wbuf+8, rblk+j*8+4, 4* sizeof(char));
+                    writeBlk->writeOneLongTuple((unsigned char*)wbuf);
+                }
+            }
+        }
+        freeBlockInBuffer(rblk, &buf);
+        delete(readBlks_S);
+    }
     delete(writeBlk);
 }
 
@@ -336,6 +358,8 @@ int main() {
 //    selectFromRel_linear(60, RELATION_S, 1100);
 
     std::cout<<"Empty Blocks: "<<buf.numFreeBlk<<std::endl;
+
+    nestLoopJoin(1800);
 //
 //    projection(RELATION_S, 0, 1700);
 
