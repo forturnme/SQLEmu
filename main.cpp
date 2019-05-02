@@ -292,6 +292,23 @@ void projection(int rel, int row, int blkStartNum){
     delete(writeBlk);
 }
 
+void destinct(int relStart ,int relEnd, int blkStartNum){
+    // 对排序好的块进行去重
+    // TODO: 使用readBlocks完成去重
+    char dbuf[9] = {0}; // 当前扫视的块放这里
+}
+
+void nestLoopJoin(int blkStartNum){
+    // 简单的连接算法
+    auto writeBlk = new writeBufferBlock(&buf, blkStartNum);
+    auto readBlks_S = new readBlocks(20, 51, 6, &buf);
+    auto readBlks_R = new readBlocks(1, 16, 1, &buf);
+    readBlks_R->refresh(); // 填满R的磁盘块
+    char wbuf[13] = {0};// 写入缓存
+    // TODO: 手工forward，不损坏R中存储的块的情况下完成S的连接
+    delete(writeBlk);
+}
+
 int main() {
     // 以例程为脚手架
     unsigned char *blk; /* A pointer to a block */
@@ -319,15 +336,18 @@ int main() {
 //    selectFromRel_linear(60, RELATION_S, 1100);
 
     std::cout<<"Empty Blocks: "<<buf.numFreeBlk<<std::endl;
-
-    projection(RELATION_S, 0, 1700);
+//
+//    projection(RELATION_S, 0, 1700);
 
 //    sortRel(RELATION_R, 1200);
 //    sortRel(RELATION_S, 1400);
 
 //    auto readIter = new readBlocks(1400, 1431, 6, &buf);
 //    std::cout<<"Empty Blocks: "<<buf.numFreeBlk<<std::endl;
+//    readIter->refresh();
+//    std::cout<<"Empty Blocks: "<<buf.numFreeBlk<<std::endl;
 //
+////
 //    for (int j = 0; j < 24; ++j) {
 //        if(j==3) readIter->doSnapshot();
 //        if(j==15) readIter->recall();
@@ -342,7 +362,7 @@ int main() {
 //    selectFromRel_Binary(40, 1200, 1215, 1400);
 
 //    sortRel(RELATION_S, 1500);
-
+//
 //    printIO(&buf);
 //    selectFromRel_Binary(60, 1500, 1531, 1700);
 //    printIO(&buf);

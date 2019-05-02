@@ -18,6 +18,7 @@ public:
     writeBufferBlock(Buffer* buff, int startCode);
     ~writeBufferBlock();
     void writeOneTuple(const unsigned char* src);
+    void writeOneLongTuple(const unsigned char* src);
 };
 
 writeBufferBlock::writeBufferBlock(Buffer *buff, int startCode) {
@@ -50,6 +51,22 @@ void writeBufferBlock::writeOneTuple(const unsigned char* src){
         this->freeSpace = 7;
     }
     memcpy(this->blk+8*(7-freeSpace), src, 8* sizeof(char));
+    this->freeSpace--;
+}
+
+void writeBufferBlock::writeOneLongTuple(const unsigned char* src){
+    // 向缓存写进一个长元组，16byte
+    // 若空余的空间没有，则先把自己写进磁盘，然后申请新的区域，更新写入缓存，再开始写入
+    if(this->freeSpace==3){
+        // 开始转写进磁盘
+        setBlkNextAddr(this->blk, this->blockCode+1);
+        putBlockFromBufToDisk(this->blk, this->blockCode, this->bufAddr);
+        this->blockCode++;
+        this->blk = getNewBlockInBuffer(this->bufAddr);
+        bzero(this->blk, 64*sizeof(char));
+        this->freeSpace = 7;
+    }
+    memcpy(this->blk+12*(7-freeSpace), src, 12* sizeof(char));
     this->freeSpace--;
 }
 
