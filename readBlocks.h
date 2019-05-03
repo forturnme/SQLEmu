@@ -241,7 +241,7 @@ bool readBlocks::refresh() {
     for (int i = 0; i < lim; ++i) {
         // 首先把剩下的区域填充完
         blkToLoad = this->getNthNumber(this->qLength()-1)+1;
-        if(blkToLoad>this->endBlock)break;
+        if(blkToLoad>this->endBlock) break;
         this->loadBlkFromDisc(blkToLoad);
     }
     for (int i = 0; i < this->memCnt; ++i) {

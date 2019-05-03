@@ -676,7 +676,7 @@ void nestLoopHashJoin(int startBlk){
 void hashNestLoopJoin(int startBlk){
     // 由于内存区域过少，故无法实现纯hash join
     // 第一步：先设置6个写缓存区域作为哈希桶，剩下的一个作为输入缓存，另一个留作输出缓存
-    // 先读小表，做哈希
+    // 先读两张表，都做哈希
     auto read = new readBlocks(1, 16, 1, &buf);
     // 申请6个写缓存
     writeBufferBlock* write[6];
@@ -690,51 +690,60 @@ void hashNestLoopJoin(int startBlk){
         read->forward();
     }
     // 记录有多少哈希块被生成了，之后删除写缓存
-    int hashBlkCnts[6];
+    int hashBlkCntsR[6];
     for (int i = 0; i < 6; ++i) {
-        hashBlkCnts[i] = write[i]->writtenBlksExpected();
+        hashBlkCntsR[i] = write[i]->writtenBlksExpected();
         delete(write[i]);
     }
     delete(read);
-    auto joinBuf = new writeBufferBlock(&buf, startBlk); // 最终结果的写缓存
-    read = new readBlocks(20, 51, 1, &buf); // 读来S表
-    readBlocks* hashes[6]; // 装哈希表
+    // 把s也全部读入，做哈希
+    read = new readBlocks(20, 51, 1, &buf);
     for (int i = 0; i < 6; ++i) {
-        if(hashBlkCnts[i]>0){
-            hashes[i] = new readBlocks(i*10+startBlk+20000, i*10+startBlk+20000+hashBlkCnts[i]-1, 1, &buf);
-            hashes[i]->doSnapshot(); // 供回溯用
-        }
-        else hashes[i] = NULL;
+        write[i] = new writeBufferBlock(&buf, i*20+startBlk+200+20000);
     }
-    int sval0 = 0, ind=0; // 暂存主键值
-    char bar[13] = {0}; // 用于构造写进元组
     while (true){
-        // 读上来S的元组做哈希
-        sval0 = read->getValSilent(0);
-        ind = sval0%6;
-        if(hashes[ind]){
-            // 准备写入的三元组
-            bzero(bar, 13*sizeof(char));
-            memcpy(bar, read->getTupleSilent(), 4*sizeof(char));
-            memcpy(bar+8, read->getTupleSilent()+4, 4*sizeof(char));
-            // 对哈希表全部元组做连接测试
-            while (true){
-                if(hashes[ind]->getValSilent(0)==sval0){
-                    // 命中，写入
-                    memcpy(bar+4, hashes[ind]->getTupleSilent()+4, 4*sizeof(char));
-                    joinBuf->writeOneLongTuple((unsigned char*)bar);
-                }
-                if(hashes[ind]->end())break;
-                hashes[ind]->forward();
-            }
-            hashes[ind]->recall();
-        }
+        // 逐个做哈希
+        write[read->getValSilent(0)%6]->writeOneTuple(read->getTupleSilent());
         if(read->end())break;
         read->forward();
     }
-    // 清理内存
+    // 记录有多少哈希块被生成了，之后删除写缓存
+    int hashBlkCntsS[6];
     for (int i = 0; i < 6; ++i) {
-        delete(hashes[i]);
+        hashBlkCntsS[i] = write[i]->writtenBlksExpected();
+        delete(write[i]);
+    }
+    delete(read);
+    int rval0 = 0, ind = 0; // 暂存主键值
+    char bar[13] = {0}; // 用于构造写进元组
+    auto joinBuf = new writeBufferBlock(&buf, startBlk); // 最终结果的写缓存
+    readBlocks* readR, *readS; // 两个哈希表的读缓存，分别占1、6块
+    for (int i = 0; i < 6; ++i) {
+        readR = new readBlocks(i*20+startBlk+20000, i*20+startBlk+20000+hashBlkCntsR[i]-1, 1, &buf);
+        readS = new readBlocks(i*20+startBlk+200+20000, i*20+startBlk+200+20000+hashBlkCntsS[i]-1, 6, &buf);
+        readS->refresh();
+        readS->doSnapshot();
+        while (true){
+            // 用R里面每条连S
+            rval0 = readR->getValSilent(0);
+            // 先构造输出缓存
+            bzero(bar, 13*sizeof(char));
+            memcpy(bar, readR->getTupleSilent(), 8*sizeof(char));
+            readS->recall();
+            while (true){
+                // 遍历内存里的S元组
+                if(readS->getValSilent(0)==rval0){
+                    memcpy(bar+4, readS->getTupleSilent()+4, 4* sizeof(char));
+                    joinBuf->writeOneLongTuple((unsigned char*)bar);
+                }
+                if(readS->end())break;
+                readS->forward();
+            }
+            if(readR->end())break;
+            readR->forward();
+        }
+        delete(readR);
+        delete(readS);
     }
     delete(joinBuf);
 }
@@ -782,7 +791,8 @@ int main() {
 //    doUnion(2100, false);
 //    projection(RELATION_S, 0, 1700);
 
-    nestLoopHashJoin(2300);
+//    nestLoopHashJoin(2300);
+//    hashNestLoopJoin(2500);
 //    showBlocksInDiscLong(2300, 2356);
 
 //    sortRel(RELATION_R, 1200);
