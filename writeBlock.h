@@ -15,10 +15,12 @@ public:
     unsigned char *blk = NULL;
     int freeSpace = 7;
     int blockCode = 1000;
+    int written = 0; // 写盘次数
     writeBufferBlock(Buffer* buff, int startCode);
     ~writeBufferBlock();
     void writeOneTuple(const unsigned char* src);
     void writeOneLongTuple(const unsigned char* src);
+    int writtenBlksExpected(); // 返回自身期望的写盘次数
 };
 
 writeBufferBlock::writeBufferBlock(Buffer *buff, int startCode) {
@@ -35,6 +37,7 @@ writeBufferBlock::~writeBufferBlock(){
     if(this->freeSpace!=7){
         setBlkNextAddr(this->blk, 0);
         putBlockFromBufToDisk(this->blk, this->blockCode, this->bufAddr);
+        written++;
     }
 }
 
@@ -49,6 +52,7 @@ void writeBufferBlock::writeOneTuple(const unsigned char* src){
         this->blk = getNewBlockInBuffer(this->bufAddr);
         bzero(this->blk, 64*sizeof(char));
         this->freeSpace = 7;
+        written++;
     }
     memcpy(this->blk+8*(7-freeSpace), src, 8* sizeof(char));
     this->freeSpace--;
@@ -68,6 +72,12 @@ void writeBufferBlock::writeOneLongTuple(const unsigned char* src){
     }
     memcpy(this->blk+12*(7-freeSpace), src, 12* sizeof(char));
     this->freeSpace--;
+}
+
+int writeBufferBlock::writtenBlksExpected() {
+    // 如果现在没有内容，则返回written值
+    // 如果有内容，则返回written+1
+    return this->written + (this->freeSpace != 7);
 }
 
 #endif //SQLEMU_WRITEBLOCK_H

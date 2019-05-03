@@ -607,6 +607,72 @@ void showBlocksInDiscLong(int start, int end){
     }
 }
 
+void nestLoopHashJoin(int startBlk){
+    // 由于内存区域过少，故无法实现纯hash join
+    // 第一步：先设置6个写缓存区域作为哈希桶，剩下的一个作为输入缓存，另一个留作输出缓存
+    // 先读小表，做哈希
+    auto read = new readBlocks(1, 16, 1, &buf);
+    // 申请6个写缓存
+    writeBufferBlock* write[6];
+    for (int i = 0; i < 6; ++i) {
+        write[i] = new writeBufferBlock(&buf, i*10+startBlk+100);
+    }
+    while (true){
+        // 逐个做哈希
+        write[read->getValSilent(0)%6]->writeOneTuple(read->getTupleSilent());
+        if(read->end())break;
+        read->forward();
+    }
+    // 记录有多少哈希块被生成了，之后删除写缓存
+    int hashBlkCnts[6];
+    for (int i = 0; i < 6; ++i) {
+        hashBlkCnts[i] = write[i]->writtenBlksExpected();
+        delete(write[i]);
+    }
+    delete(read);
+    auto joinBuf = new writeBufferBlock(&buf, startBlk); // 最终结果的写缓存
+    read = new readBlocks(20, 51, 1, &buf); // 读来S表
+    readBlocks* hashes[6]; // 装哈希表
+    for (int i = 0; i < 6; ++i) {
+        if(hashBlkCnts[i]>0){
+            hashes[i] = new readBlocks(i*10+startBlk+100, i*10+startBlk+100+hashBlkCnts[i]-1, 1, &buf);
+            hashes[i]->doSnapshot(); // 供回溯用
+        }
+        else hashes[i] = NULL;
+    }
+    int sval0 = 0, ind=0; // 暂存主键值
+    char bar[13] = {0}; // 用于构造写进元组
+    while (true){
+        // 读上来S的元组做哈希
+        sval0 = read->getValSilent(0);
+        ind = sval0%6;
+        if(hashes[ind]){
+            // 准备写入的三元组
+            bzero(bar, 13*sizeof(char));
+            memcpy(bar, read->getTupleSilent(), 4*sizeof(char));
+            memcpy(bar+8, read->getTupleSilent()+4, 4*sizeof(char));
+            // 对哈希表全部元组做连接测试
+            while (true){
+                if(hashes[ind]->getValSilent(0)==sval0){
+                    // 命中，写入
+                    memcpy(bar+4, hashes[ind]->getTupleSilent()+4, 4*sizeof(char));
+                    joinBuf->writeOneLongTuple((unsigned char*)bar);
+                }
+                if(hashes[ind]->end())break;
+                hashes[ind]->forward();
+            }
+            hashes[ind]->recall();
+        }
+        if(read->end())break;
+        read->forward();
+    }
+    // 清理内存
+    for (int i = 0; i < 6; ++i) {
+        delete(hashes[i]);
+    }
+    delete(joinBuf);
+}
+
 int main() {
     // 以例程为脚手架
     unsigned char *blk; /* A pointer to a block */
@@ -619,13 +685,13 @@ int main() {
     }
 
     /* Read the block from the hard disk */
-    blk = getBlockFromDiskToBuf(1, &buf);
-    showBlock(blk);
-
-    sortBlock(blk);
-    showBlock(blk);
-
-    freeBlockInBuffer(blk, &buf);
+//    blk = getBlockFromDiskToBuf(1, &buf);
+//    showBlock(blk);
+//
+//    sortBlock(blk);
+//    showBlock(blk);
+//
+//    freeBlockInBuffer(blk, &buf);
 
     // 选择测试
 
@@ -647,19 +713,22 @@ int main() {
 //    doDiff(2100, 1, false);
 
 
-    doUnion(2100, false);
+//    doUnion(2100, false);
 //    projection(RELATION_S, 0, 1700);
+
+//    nestLoopHashJoin(2300);
+//    showBlocksInDiscLong(2300, 2356);
 
 //    sortRel(RELATION_R, 1200);
 //    sortRel(RELATION_S, 1400);
 
-//    auto readIter = new readBlocks(1400, 1431, 6, &buf);
+    auto readIter = new readBlocks(1, 16, 6, &buf);
 //    std::cout<<"Empty Blocks: "<<buf.numFreeBlk<<std::endl;
 //    readIter->refresh();
 //    std::cout<<"Empty Blocks: "<<buf.numFreeBlk<<std::endl;
 //
 
-//    for (int j = 0; j < 24; ++j) {
+//    for (int j = 0; j < 112+12; ++j) {
 //        if(j==3) readIter->doSnapshot();
 //        if(j==15) readIter->recall();
 //        std::cout<<readIter->getVal(0)<<std::endl;

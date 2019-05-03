@@ -78,7 +78,7 @@ readBlocks::readBlocks(int startBlk, int endBlk, int memCnt, Buffer *buff) {
     // 生成读取区域。输入开始块编号，结束块编号，持有内存块数，对应缓冲区
     this->buff = buff;
     this->memCnt = memCnt;
-    this->blkNums = (int*)malloc(sizeof(int)*memCnt+1);
+    this->blkNums = (int*)malloc(sizeof(int)*(memCnt+1));
     this->memBlocks = (unsigned char**)malloc(sizeof(unsigned char*)*(memCnt+1));
     this->R_device.blkNums = (int*)malloc(sizeof(int)*(memCnt+1));
     bzero(this->memBlocks, sizeof(unsigned char*)*(memCnt+1));
@@ -206,8 +206,8 @@ bool readBlocks::forward() {
 bool readBlocks::end() {
     // 如果到达最后则返回true
     if(this->getNthNumberVal(this->block)==this->endBlock){
-        if(this->tuple==6)return true;
-        if(getNthTupleY(this->getNthBlock(this->block), this->tuple+1, 0)==0)return true;
+        if(this->tuple>=6)return true;
+        return getNthTupleY(this->getNthBlock(this->block), this->tuple + 1, 0) == 0;
     }
     return false;
 }
@@ -262,15 +262,51 @@ bool readBlocks::recall() {
     int index;
     int preLength = (this->R_device.qFront-this->R_device.qEnd+memCnt+1)%(memCnt+1);
     int nowLength = this->qLength();
-    for (int i = 0; i < memCnt; ++i) {
-        index = (i+this->R_device.qEnd)%(memCnt+1);
-        if(this->R_device.blkNums[index]!=this->blkNums[index]&&i<preLength){
-            // 如果不相等则读回此前的块
-            freeBlockInBuffer(this->memBlocks[index], this->buff);
-            this->memBlocks[index] = getBlockFromDiskToBuf(this->R_device.blkNums[index], this->buff);
+    for (int i = 0; i < memCnt+1; ++i) {
+        // 首先清除掉存档时未使用，但现在正使用的块
+        if((i-this->qEnd+memCnt+1)%(memCnt+1)<nowLength&&
+            (i-this->R_device.qEnd+memCnt+1)%(memCnt+1)>=preLength) {
+            freeBlockInBuffer(this->memBlocks[i], this->buff);
         }
-        if(i>=preLength&&i<nowLength)freeBlockInBuffer(this->memBlocks[index], this->buff); // 删除之前没有使用的块
     }
+    for (int i = 0; i < memCnt+1; ++i) {
+        // 然后替换两回都在使用的内容不同的块
+        if((i-this->qEnd+memCnt+1)%(memCnt+1)<nowLength&&
+           (i-this->R_device.qEnd+memCnt+1)%(memCnt+1)<preLength&&
+           this->R_device.blkNums[i]!=this->blkNums[i]) {
+            freeBlockInBuffer(this->memBlocks[i], this->buff);
+            this->memBlocks[i] = getBlockFromDiskToBuf(this->R_device.blkNums[i], this->buff);
+        }
+    }
+    for (int i = 0; i < memCnt+1; ++i) {
+        // 最后装回此前使用但现在未使用的块
+        if((i-this->qEnd+memCnt+1)%(memCnt+1)>=nowLength&&
+           (i-this->R_device.qEnd+memCnt+1)%(memCnt+1)<preLength) {
+            this->memBlocks[i] = getBlockFromDiskToBuf(this->R_device.blkNums[i], this->buff);
+        }
+    }
+//    for (int i = 0; i < memCnt; ++i) {
+//        index = (i+this->R_device.qEnd)%(memCnt+1);
+////        if((index-this->qEnd+memCnt+1)%(memCnt+1)>=nowLength){
+////            // 如果在队列外面则换回
+////            freeBlockInBuffer(this->memBlocks[index], this->buff);
+////            this->memBlocks[index] = getBlockFromDiskToBuf(this->R_device.blkNums[index], this->buff);
+////        }
+//        if(this->R_device.blkNums[index]!=this->blkNums[index]&&i<preLength){
+//            // 如果不相等则读回此前的块
+//            freeBlockInBuffer(this->memBlocks[index], this->buff);
+//            this->memBlocks[index] = getBlockFromDiskToBuf(this->R_device.blkNums[index], this->buff);
+//        }
+//        if(i>=preLength&&i<nowLength)freeBlockInBuffer(this->memBlocks[index], this->buff); // 删除之前没有使用的块
+//    }
+//    for (int i = 0; i < memCnt; ++i) {
+//        index = (i + this->R_device.qEnd) % (memCnt + 1);
+//        if ((index - this->qEnd + memCnt + 1) % (memCnt + 1) >= nowLength) {
+//            // 如果在队列外面则换回
+////            freeBlockInBuffer(this->memBlocks[index], this->buff);
+//            this->memBlocks[index] = getBlockFromDiskToBuf(this->R_device.blkNums[index], this->buff);
+//        }
+//    }
     // 还原其他的信息
     this->qEnd = this->R_device.qEnd;
     this->finish = this->R_device.finish;

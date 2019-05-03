@@ -7,6 +7,7 @@
 
 //#define DATABLOCKSTR "data/%d.blk"
 #define DATABLOCKSTR "../data/%d.blk"
+//#define DATABLOCKSTR "C:\\Users\\longh\\Documents\\NutstoreDocuments\\SQLEmu\\data/%d.blk"
 
 #include <stdlib.h>
 #include <stdio.h>
