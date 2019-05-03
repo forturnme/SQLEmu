@@ -770,14 +770,24 @@ int main() {
         return -1;
     }
 
-    sortRel(RELATION_R, SORTED_R);
-    std::cout<<"Empty Blocks: "<<buf.numFreeBlk<<std::endl;
+    int IOlast = buf.numIO;
 
+    std::cout<<"< Presorting R and S...... >"<<std::endl;
+    sortRel(RELATION_R, SORTED_R);
+    sortRel(RELATION_S, SORTED_S);
+
+    std::cout<<"< Presorting complete with "<<buf.numIO-IOlast<<"IO's >"<<std::endl;
+    IOlast = buf.numIO;
+
+    std::cout<<"       ______"<<std::endl;
+    std::cout<<"      / /    \\"<<std::endl;
+    std::cout<<"      \\ \\     "<<std::endl;
+    std::cout<<"       \\ \\"<<std::endl;
+    std::cout<<"       / /"<<std::endl;
+    std::cout<<"  \\_____/"<<std::endl;
 
     auto bpt_r = new BPT_Disx(SORTED_R, SORTED_R+15, BPT_R, &buf);
     bpt_r->find(40, 2600);
-
-    sortRel(RELATION_S, SORTED_S);
 
     auto bpt_s = new BPT_Disx(SORTED_S, SORTED_S+31, BPT_S, &buf);
     bpt_s->find(60, 2610);

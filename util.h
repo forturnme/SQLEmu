@@ -7,6 +7,10 @@
 
 Buffer buf; /* A buffer */
 
+inline void showEmptyBlockCnt(){
+    std::cout<<"Empty Blocks: "<<buf.numFreeBlk<<std::endl;
+}
+
 inline void bzero(void *pt, size_t size){
     memset(pt, 0, size);
 }
