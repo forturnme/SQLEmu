@@ -776,7 +776,7 @@ int main() {
     sortRel(RELATION_R, SORTED_R);
     sortRel(RELATION_S, SORTED_S);
 
-    std::cout<<"< Presorting complete with "<<buf.numIO-IOlast<<"IO's >"<<std::endl;
+    std::cout<<"< Presorting complete with "<<buf.numIO-IOlast<<" IO's >"<<std::endl;
     IOlast = buf.numIO;
 
     std::cout<<"       ______"<<std::endl;
