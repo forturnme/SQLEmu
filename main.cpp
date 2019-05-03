@@ -311,8 +311,7 @@ void nestLoopJoin(int blkStartNum){
         auto readBlks_S = new readBlocks(20, 51, 6, &buf);
         while(true){
             sv0 = readBlks_S->getValSilent(0);
-            sblk = readBlks_S->getTuple();
-            if(sblk == NULL)break;
+            sblk = readBlks_S->getTupleSilent();
             bzero(wbuf, 13*sizeof(char));
             memcpy(wbuf, sblk, 4* sizeof(unsigned char));
             memcpy(wbuf+8, sblk+4, 4* sizeof(unsigned char));
@@ -325,6 +324,8 @@ void nestLoopJoin(int blkStartNum){
                     writeBlk->writeOneLongTuple((unsigned char*)wbuf);
                 }
             }
+            // 若无法前进则退出
+            if(!readBlks_S->forward())break;
         }
         freeBlockInBuffer(rblk, &buf);
         delete(readBlks_S);
@@ -352,10 +353,7 @@ void sortMergeJoin(int startBlk){
             readBlkS->doSnapshot();
         } else readBlkS->recall(); // 回到之前更新探针的值
         // 获得新的R元组
-        rblk = readBlkR->getTuple(); // 此时R已经前进了
-        if(rblk==NULL){
-            break;
-        }
+        rblk = readBlkR->getTupleSilent();
         bzero(wbuf, 13* sizeof(char));
         memcpy(wbuf, rblk, 8* sizeof(unsigned char));
         while (true) {
@@ -370,6 +368,9 @@ void sortMergeJoin(int startBlk){
                 break;
             } // 此时S已经前进了
         }
+        // 前移R，若没有下一条目则结束
+        if(readBlkR->end())break;
+        !readBlkR->forward();
     }
     delete(readBlkR);
     delete(readBlkS);
@@ -378,10 +379,12 @@ void sortMergeJoin(int startBlk){
 
 // TODO: Hash Join and B+ Tree indexing
 
-void doIntersection(int startBlk){
+void doIntersection(int startBlk, bool sorted){
     // 求交，从Sort-Merge-Join改过来的
-    sortRel(RELATION_R, 10000);
-    sortRel(RELATION_S, 10020);
+    if(!sorted){
+        sortRel(RELATION_R, 10000);
+        sortRel(RELATION_S, 10020);
+    }
     auto readBlkR = new readBlocks(10000, 10015, 1, &buf);
     auto readBlkS = new readBlocks(10020, 10051, 6, &buf);
     auto writeBlk = new writeBufferBlock(&buf, startBlk);
@@ -408,7 +411,7 @@ void doIntersection(int startBlk){
             if(sval > probe)break;
             if(sval==probe&&rval1==readBlkS->getValSilent(1)){
                 // 如果有一样的就写
-                writeBlk->writeOneTuple(rblk);
+                writeBlk->writeOneTuple(readBlkS->getTupleSilent());
                 break;
             }
             if(readBlkS->getTuple()==NULL){
@@ -436,7 +439,7 @@ void doDiff(int startBlk, int mode, bool sorted){
         readBlkS = new readBlocks(10020, 10051, 6, &buf);
     }else{
         readBlkR = new readBlocks(10020, 10051, 1, &buf);
-        readBlkS = new readBlocks(10000, 10015, 6, &buf);
+        readBlkS = new readBlocks(10000, 10015, 3, &buf);
     }
     auto writeBlk = new writeBufferBlock(&buf, startBlk);
     int probe = 0; // 目前扫视的值
@@ -458,7 +461,6 @@ void doDiff(int startBlk, int mode, bool sorted){
         while (true) {
             // 开始检查S中的元组，直到第一个大于探针的值出现为止
             sval = readBlkS->getValSilent(0);
-//            if(rval1==606)for(int m=0;m<8;m++)std::putchar(*(rblk+m));
             if(sval > probe)break;
             if(sval == probe&&rval1==readBlkS->getValSilent(1)){
                 // 如果没有一样的就写
@@ -498,7 +500,7 @@ void doUnion(int startBlk, bool sorted){
             readBlkS = new readBlocks(10020, 10051, 6, &buf);
         } else{
             readBlkR = new readBlocks(10020, 10051, 1, &buf);
-            readBlkS = new readBlocks(10000, 10015, 6, &buf);
+            readBlkS = new readBlocks(10000, 10015, 3, &buf);
         }
         // 以R为外，S为内，对R的每个值进行连接
         probe = 0;
@@ -511,10 +513,7 @@ void doUnion(int startBlk, bool sorted){
             } else readBlkS->recall(); // 回到之前更新探针的值
             // 获得新的R元组
             rval1 = readBlkR->getValSilent(1);
-            rblk = readBlkR->getTuple(); // 此时R已经前进了
-            if(rblk==NULL){
-                break;
-            }
+            rblk = readBlkR->getTupleSilent(); // 此时R已经前进了
             same = false;
             while (true) {
                 // 开始检查S中的元组，直到第一个大于探针的值出现为止
@@ -530,10 +529,11 @@ void doUnion(int startBlk, bool sorted){
                 } // 此时S已经前进了
             }
             if(!same)writeBlk->writeOneTuple(rblk);
+            if(readBlkR->end())break;
+            readBlkR->forward();
         }
         delete(readBlkR);
         delete(readBlkS);
-        std::cout<<"ok1"<<std::endl;
     }
     // 做一次交，屑操作再临
     probe = 0;
@@ -571,6 +571,42 @@ void doUnion(int startBlk, bool sorted){
     delete(writeBlk);
 }
 
+void showBlocksInDisc(int start, int end){
+    // 显示磁盘上从start到end的块
+    auto read = new readBlocks(start, end, 7, &buf);
+    char bar[5] = {0};
+    for(unsigned char* i=read->getTuple();i!=NULL;i=read->getTuple()){
+        bzero(bar, 5*sizeof(char));
+        memcpy(bar, i, 4* sizeof(char));
+        printf("%s\t", bar);
+        bzero(bar, 5*sizeof(char));
+        memcpy(bar, i+4, 4* sizeof(char));
+        printf("%s\n", bar);
+    }
+    delete(read);
+}
+
+void showBlocksInDiscLong(int start, int end){
+    // 显示磁盘上从start到end的三元块
+    for (int i = start; i <= end; ++i) {
+        auto read = new readBlocks(i, i, 1, &buf);
+        char bar[5] = {0};
+        unsigned char* p=read->getTupleSilent();
+        for(int j=0;j<4;j++){
+            bzero(bar, 5*sizeof(char));
+            memcpy(bar, p+j*12, 4* sizeof(char));
+            printf("%s\t", bar);
+            bzero(bar, 5*sizeof(char));
+            memcpy(bar, p+4+j*12, 4* sizeof(char));
+            printf("%s\t", bar);
+            bzero(bar, 5*sizeof(char));
+            memcpy(bar, p+8+j*12, 4* sizeof(char));
+            printf("%s\n", bar);
+        }
+        delete(read);
+    }
+}
+
 int main() {
     // 以例程为脚手架
     unsigned char *blk; /* A pointer to a block */
@@ -601,22 +637,17 @@ int main() {
 
 //    nestLoopJoin(1800);
 //    sortMergeJoin(1900);
+//    showBlocksInDiscLong(1800, 1869);
 //
 //    doIntersection(2000);
-// TODO: 修改diff和union，修复s-r结果重复的问题
-    doDiff(2100, 1, false);
+//    doDiff(2200, 1, false);
 
-    auto read = new readBlocks(2100, 2131, 7, &buf);
-    char bar[5] = {0};
-    for(unsigned char* i=read->getTuple();i!=NULL;i=read->getTuple()){
-        bzero(bar, 5*sizeof(char));
-        memcpy(bar, i, 4* sizeof(char));
-        printf("%s\t", bar);
-        bzero(bar, 5*sizeof(char));
-        memcpy(bar, i+4, 4* sizeof(char));
-        printf("%s\n", bar);
-    }
-//    doUnion(2100, false);
+//    showBlocksInDisc(2200, 2230);
+// TODO: 修改diff和union，修复s-r结果重复的问题
+//    doDiff(2100, 1, false);
+
+
+    doUnion(2100, false);
 //    projection(RELATION_S, 0, 1700);
 
 //    sortRel(RELATION_R, 1200);
