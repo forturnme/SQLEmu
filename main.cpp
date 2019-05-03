@@ -6,10 +6,6 @@
 #include "writeBlock.h"
 
 // B+ Tree implementing
-#include "predefined.h"
-#include "bpt.h"
-#include "bpt.cc"
-
 #include "bpt_disx.h"
 
 #define RELATION_R 0
