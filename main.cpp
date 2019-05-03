@@ -756,6 +756,18 @@ int main() {
         return -1;
     }
 
+
+    sortRel(RELATION_R, 8000);
+    std::cout<<"Empty Blocks: "<<buf.numFreeBlk<<std::endl;
+
+
+    auto bpt_r = new BPT_Disx(8000, 8015, 9000, &buf);
+    bpt_r->find(40, 2600);
+
+    sortRel(RELATION_S, 8020);
+
+    auto bpt_s = new BPT_Disx(8020, 8051, 9020, &buf);
+    bpt_s->find(60, 2610);
     /* Read the block from the hard disk */
 //    blk = getBlockFromDiskToBuf(1, &buf);
 //    showBlock(blk);

@@ -69,6 +69,7 @@ void writeBufferBlock::writeOneLongTuple(const unsigned char* src){
         this->blk = getNewBlockInBuffer(this->bufAddr);
         bzero(this->blk, 64*sizeof(char));
         this->freeSpace = 7;
+        written++;
     }
     memcpy(this->blk+12*(7-freeSpace), src, 12* sizeof(char));
     this->freeSpace--;

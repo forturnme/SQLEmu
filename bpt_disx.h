@@ -24,9 +24,10 @@ public:
     void find(int val, int startBlk); // 查找，只支持查找第一个属性
 };
 
-BPT_Disx::BPT_Disx(int sortedStart, int sortedEnd, int treeStart, Buffer* buff) {
+BPT_Disx::BPT_Disx(int sortedStart, int sortedEnd, int treeStart, Buffer* buffy) {
     // 从sortedStart开始到sortedEnd结束的有序关系
     // 建立一颗从sortedEnd+1开始存储的B+树
+    this->buff = buffy;
     leafStartBlk = sortedStart;
     leafEndBlk = sortedEnd;
     int lastStart = treeStart; // 之前一次的开始块
@@ -60,18 +61,17 @@ BPT_Disx::BPT_Disx(int sortedStart, int sortedEnd, int treeStart, Buffer* buff) 
         read->forward();
     }
     delete(read);
-    treeStart+=write->writtenBlksExpected();
+    treeStart = treeStart+write->writtenBlksExpected();
     delete(write);
     // 开始逐级向上生成节点
     unsigned char* keyBlk; // 读取用
     while (true){
-        write = new writeBufferBlock(buff, treeStart);
         if(treeStart-lastStart==1){
             // 如果上一轮只有一个节点生成，则将其作为根，结束
             treeStartBlk = lastStart;
-            delete(write);
             break;
         }
+        write = new writeBufferBlock(buff, treeStart);
         // 对从第二个开始的每一个非叶节点，把第一个key送去父节点
         for (int i = lastStart+1; i < treeStart; ++i) {
             keyBlk = getBlockFromDiskToBuf(i, buff);
