@@ -34,7 +34,8 @@ public:
     bool doSnapshot(); // 存储当前的状态
     bool recall(); // 还原此前的状态
     bool refresh(); // 更换指针所在块前面的块
-    bool end();
+    bool end(); // 判断读取是否到达末端
+    int getCurrentBlkNum(); // 返回当前指针在的块号(*****.blk中的*****)
 private:
     bool finish= false; // 是否读到最后一项
     int startBlock=0; // 开始的磁盘块编号
@@ -51,7 +52,6 @@ private:
     inline int& getNthNumber(int n); // 获取队列中第n个块号
     inline int getNthNumberVal(int n); // 获取队列中第n个块号
     inline bool toNextBlock(); // 使指针移到下个块，不能移动则返回false
-//    int qLength=0; // 队列中拥有的非空块个数
     inline int qLength(){// 返回队列长度
         return (qFront-qEnd+memCnt+1)%(memCnt+1);
     }
@@ -117,7 +117,7 @@ inline bool readBlocks::toNextBlock() {
 bool readBlocks::qForward() {
     // 队首前进
     if(this->full()){
-        perror("ERROR 530");
+        perror("ERROR 120: read blocks reached an illegal area");
         return false;
     }
     qFront = (qFront+1)%(memCnt+1);
@@ -259,7 +259,6 @@ bool readBlocks::recall() {
     // 还原至储存的事象，包含将内存替换掉的工作
     if(!this->R_device.hasReflect)return false;
     // 首先来还原内存区域
-    int index;
     int preLength = (this->R_device.qFront-this->R_device.qEnd+memCnt+1)%(memCnt+1);
     int nowLength = this->qLength();
     for (int i = 0; i < memCnt+1; ++i) {
@@ -285,28 +284,6 @@ bool readBlocks::recall() {
             this->memBlocks[i] = getBlockFromDiskToBuf(this->R_device.blkNums[i], this->buff);
         }
     }
-//    for (int i = 0; i < memCnt; ++i) {
-//        index = (i+this->R_device.qEnd)%(memCnt+1);
-////        if((index-this->qEnd+memCnt+1)%(memCnt+1)>=nowLength){
-////            // 如果在队列外面则换回
-////            freeBlockInBuffer(this->memBlocks[index], this->buff);
-////            this->memBlocks[index] = getBlockFromDiskToBuf(this->R_device.blkNums[index], this->buff);
-////        }
-//        if(this->R_device.blkNums[index]!=this->blkNums[index]&&i<preLength){
-//            // 如果不相等则读回此前的块
-//            freeBlockInBuffer(this->memBlocks[index], this->buff);
-//            this->memBlocks[index] = getBlockFromDiskToBuf(this->R_device.blkNums[index], this->buff);
-//        }
-//        if(i>=preLength&&i<nowLength)freeBlockInBuffer(this->memBlocks[index], this->buff); // 删除之前没有使用的块
-//    }
-//    for (int i = 0; i < memCnt; ++i) {
-//        index = (i + this->R_device.qEnd) % (memCnt + 1);
-//        if ((index - this->qEnd + memCnt + 1) % (memCnt + 1) >= nowLength) {
-//            // 如果在队列外面则换回
-////            freeBlockInBuffer(this->memBlocks[index], this->buff);
-//            this->memBlocks[index] = getBlockFromDiskToBuf(this->R_device.blkNums[index], this->buff);
-//        }
-//    }
     // 还原其他的信息
     this->qEnd = this->R_device.qEnd;
     this->finish = this->R_device.finish;
@@ -326,6 +303,11 @@ readBlocks::~readBlocks() {
     free(this->blkNums);
     free(this->memBlocks);
     if(this->R_device.hasReflect)free(this->R_device.blkNums);
+}
+
+int readBlocks::getCurrentBlkNum() {
+    // 获得当前的块号（磁盘）
+    return getNthNumberVal(block);
 }
 
 #endif //SQLEMU_READBLOCKS_H

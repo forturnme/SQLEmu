@@ -10,12 +10,17 @@
 #include "bpt.h"
 #include "bpt.cc"
 
+#include "bpt_disx.h"
+
 #define RELATION_R 0
 #define RELATION_S 1
 
-#define REL_START_END(src, firstBlkNum, lastBlkNum) switch(src){case 0:firstBlkNum = 1;lastBlkNum = 16;break;case 1:firstBlkNum = 20;lastBlkNum = 51;break;default:return;}
-#define REL_FIRST_VALUE_VALID(src, value) switch(src){case 0:if(value<1||value>40)return;break;case 1:if(value<20||value>60)return;break;default:return;}
-
+#define REL_START_END(src, firstBlkNum, lastBlkNum) \
+    switch(src){case 0:firstBlkNum = 1;lastBlkNum = 16; \
+    break;case 1:firstBlkNum = 20;lastBlkNum = 51;break;default:return;}
+#define REL_FIRST_VALUE_VALID(src, value) \
+    switch(src){case 0:if(value<1||value>40)return;break; \
+    case 1:if(value<20||value>60)return;break;default:return;}
 
 void selectFromRel_linear(int value, int src, int startBlock){
     // 从r或s选出前一个属性为对应值的元组，线性选择，naive
@@ -292,12 +297,6 @@ void projection(int rel, int row, int blkStartNum){
     delete(writeBlk);
 }
 
-void destinct(int relStart ,int relEnd, int blkStartNum){
-    // 对排序好的块进行去重
-    // TODO: 使用readBlocks完成去重
-    char dbuf[9] = {0}; // 当前扫视的块放这里
-}
-
 void nestLoopJoin(int blkStartNum){
     // 简单的连接算法
     auto writeBlk = new writeBufferBlock(&buf, blkStartNum);
@@ -376,8 +375,6 @@ void sortMergeJoin(int startBlk){
     delete(readBlkS);
     delete(writeBlk);
 }
-
-// TODO: Hash Join and B+ Tree indexing
 
 void doIntersection(int startBlk, bool sorted){
     // 求交，从Sort-Merge-Join改过来的
@@ -784,9 +781,6 @@ int main() {
 //    doDiff(2200, 1, false);
 
 //    showBlocksInDisc(2200, 2230);
-// TODO: 修改diff和union，修复s-r结果重复的问题
-//    doDiff(2100, 1, false);
-
 
 //    doUnion(2100, false);
 //    projection(RELATION_S, 0, 1700);
