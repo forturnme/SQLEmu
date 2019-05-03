@@ -11,6 +11,13 @@
 #define RELATION_R 0
 #define RELATION_S 1
 
+// 有序区
+#define SORTED_R 8000
+#define SORTED_S 8020
+// B+树的存放位置
+#define BPT_R 9000
+#define BPT_S 9020
+
 #define REL_START_END(src, firstBlkNum, lastBlkNum) \
     switch(src){case 0:firstBlkNum = 1;lastBlkNum = 16; \
     break;case 1:firstBlkNum = 20;lastBlkNum = 51;break;default:return;}
@@ -54,7 +61,7 @@ void sortRel(int src, int startBlock){
             sortBlock(blk[j]);
         }
         // 7路归并输出为有序块
-        auto *writeBlk = new writeBufferBlock(&buf, startBlock+100+i*7);
+        auto *writeBlk = new writeBufferBlock(&buf, startBlock+2000+i*7);
         int blkInd[7] = {0}; // 指示每块里当前扫视到的位置
         int minNum; // 此轮最小的值
         int minIn; // 此轮最小的位置
@@ -90,7 +97,7 @@ void sortRel(int src, int startBlock){
     bzero(readCandidates, blkCnt*sizeof(int));
     for (int i = 0; i < segCnt; ++i) {
         // 首先读进来最小的segCnt块
-        blk[i] = getBlockFromDiskToBuf(startBlock + 100 + i * 7, &buf);
+        blk[i] = getBlockFromDiskToBuf(startBlock + 2000 + i * 7, &buf);
     }
     auto *writeBlk = new writeBufferBlock(&buf, startBlock);
     int blkInd[7] = {0}; // 指示每块里当前扫视到的位置
@@ -111,7 +118,7 @@ void sortRel(int src, int startBlock){
                 }
                 // 释放旧块，装进新块，换块次数加一，重置位置指示，完成后正常地维护最小值
                 freeBlockInBuffer(blk[i], &buf);
-                blk[i] = getBlockFromDiskToBuf(changed[i]+i*7+startBlock+100, &buf);
+                blk[i] = getBlockFromDiskToBuf(changed[i]+i*7+startBlock+2000, &buf);
                 changed[i]++;
                 blkInd[i] = 0;
             }
@@ -328,12 +335,14 @@ void nestLoopJoin(int blkStartNum){
     delete(writeBlk);
 }
 
-void sortMergeJoin(int startBlk){
+void sortMergeJoin(int startBlk, bool sorted){
     // 排序链接
-    sortRel(RELATION_R, 10000);
-    sortRel(RELATION_S, 10020);
-    auto readBlkR = new readBlocks(10000, 10015, 1, &buf);
-    auto readBlkS = new readBlocks(10020, 10051, 6, &buf);
+    if(!sorted){
+        sortRel(RELATION_R, SORTED_R);
+        sortRel(RELATION_S, SORTED_S);
+    }
+    auto readBlkR = new readBlocks(SORTED_R, SORTED_R+15, 1, &buf);
+    auto readBlkS = new readBlocks(SORTED_S, SORTED_S+31, 6, &buf);
     auto writeBlk = new writeBufferBlock(&buf, startBlk);
     char wbuf[13] = {0};// 写入缓存
     int probe = 0; // 目前扫视的值
@@ -365,7 +374,7 @@ void sortMergeJoin(int startBlk){
         }
         // 前移R，若没有下一条目则结束
         if(readBlkR->end())break;
-        !readBlkR->forward();
+        readBlkR->forward();
     }
     delete(readBlkR);
     delete(readBlkS);
@@ -375,11 +384,11 @@ void sortMergeJoin(int startBlk){
 void doIntersection(int startBlk, bool sorted){
     // 求交，从Sort-Merge-Join改过来的
     if(!sorted){
-        sortRel(RELATION_R, 10000);
-        sortRel(RELATION_S, 10020);
+        sortRel(RELATION_R, SORTED_R);
+        sortRel(RELATION_S, SORTED_S);
     }
-    auto readBlkR = new readBlocks(10000, 10015, 1, &buf);
-    auto readBlkS = new readBlocks(10020, 10051, 6, &buf);
+    auto readBlkR = new readBlocks(SORTED_R, 15+SORTED_R, 1, &buf);
+    auto readBlkS = new readBlocks(SORTED_S, 31+SORTED_S, 6, &buf);
     auto writeBlk = new writeBufferBlock(&buf, startBlk);
     int probe = 0; // 目前扫视的值
     int sval, rval1;
@@ -422,17 +431,17 @@ void doDiff(int startBlk, int mode, bool sorted){
     // mode为0表示R-S，为1表示S-R
     if(!sorted){
         // 没排过序就排一次
-        sortRel(RELATION_R, 10000);
-        sortRel(RELATION_S, 10020);
+        sortRel(RELATION_R, SORTED_R);
+        sortRel(RELATION_S, SORTED_S);
     }
     readBlocks* readBlkR;
     readBlocks* readBlkS;
     if(mode==0){
-        readBlkR = new readBlocks(10000, 10015, 1, &buf);
-        readBlkS = new readBlocks(10020, 10051, 6, &buf);
+        readBlkR = new readBlocks(SORTED_R, SORTED_R+15, 1, &buf);
+        readBlkS = new readBlocks(SORTED_S, SORTED_S+31, 6, &buf);
     }else{
-        readBlkR = new readBlocks(10020, 10051, 1, &buf);
-        readBlkS = new readBlocks(10000, 10015, 6, &buf);
+        readBlkR = new readBlocks(SORTED_S, SORTED_S+31, 1, &buf);
+        readBlkS = new readBlocks(SORTED_R, SORTED_R+15, 6, &buf);
     }
     auto writeBlk = new writeBufferBlock(&buf, startBlk);
     int probe = 0; // 目前扫视的值
@@ -476,8 +485,8 @@ void doUnion(int startBlk, bool sorted){
     // 交运算，实际上此步偷懒了，直接两个差加一个并，毫无复用性^_^
     if(!sorted){
         // 没排过序就排一次
-        sortRel(RELATION_R, 10000);
-        sortRel(RELATION_S, 10020);
+        sortRel(RELATION_R, SORTED_R);
+        sortRel(RELATION_S, SORTED_S);
     }
     readBlocks* readBlkR;
     readBlocks* readBlkS;
@@ -489,11 +498,11 @@ void doUnion(int startBlk, bool sorted){
     // 做两次差，屑操作
     for(int i = 0; i < 2; i++){
         if(i==0){
-            readBlkR = new readBlocks(10000, 10015, 1, &buf);
-            readBlkS = new readBlocks(10020, 10051, 6, &buf);
+            readBlkR = new readBlocks(SORTED_R, SORTED_R+15, 1, &buf);
+            readBlkS = new readBlocks(SORTED_S, SORTED_S+31, 6, &buf);
         } else{
-            readBlkR = new readBlocks(10020, 10051, 1, &buf);
-            readBlkS = new readBlocks(10000, 10015, 6, &buf);
+            readBlkR = new readBlocks(SORTED_S, SORTED_S+31, 1, &buf);
+            readBlkS = new readBlocks(SORTED_R, SORTED_R+15, 6, &buf);
         }
         // 以R为外，S为内，对R的每个值进行连接
         probe = 0;
@@ -530,8 +539,8 @@ void doUnion(int startBlk, bool sorted){
     }
     // 做一次交，屑操作再临
     probe = 0;
-    readBlkR = new readBlocks(10000, 10015, 1, &buf);
-    readBlkS = new readBlocks(10020, 10051, 6, &buf);
+    readBlkR = new readBlocks(SORTED_R, SORTED_R+15, 1, &buf);
+    readBlkS = new readBlocks(SORTED_S, SORTED_S+31, 6, &buf);
     while (true){
         if(readBlkR->getValSilent(0)!=probe){
             // 扫描到新的R值，则更新探针以及刷新S的内存，将此位置记录
@@ -566,21 +575,27 @@ void doUnion(int startBlk, bool sorted){
 
 void showBlocksInDisc(int start, int end){
     // 显示磁盘上从start到end的块
+    std::cout<<"________________________"<<std::endl;
     auto read = new readBlocks(start, end, 7, &buf);
     char bar[5] = {0};
+    int row = 0;
     for(unsigned char* i=read->getTuple();i!=NULL;i=read->getTuple()){
+        row++;
         bzero(bar, 5*sizeof(char));
         memcpy(bar, i, 4* sizeof(char));
-        printf("%s\t", bar);
+        printf("%5d | %s\t", row, bar);
         bzero(bar, 5*sizeof(char));
         memcpy(bar, i+4, 4* sizeof(char));
         printf("%s\n", bar);
     }
+    printf("\n< %d Rows x 2 Cols >\n\n", row);
     delete(read);
 }
 
 void showBlocksInDiscLong(int start, int end){
     // 显示磁盘上从start到end的三元块
+    int row = 0;
+    std::cout<<"________________________________"<<std::endl;
     for (int i = start; i <= end; ++i) {
         auto read = new readBlocks(i, i, 1, &buf);
         char bar[5] = {0};
@@ -588,16 +603,19 @@ void showBlocksInDiscLong(int start, int end){
         for(int j=0;j<4;j++){
             bzero(bar, 5*sizeof(char));
             memcpy(bar, p+j*12, 4* sizeof(char));
-            printf("%s\t", bar);
+            if(atoi(bar)==0)break;
+            printf("%5d | %s\t", row, bar);
             bzero(bar, 5*sizeof(char));
             memcpy(bar, p+4+j*12, 4* sizeof(char));
             printf("%s\t", bar);
             bzero(bar, 5*sizeof(char));
             memcpy(bar, p+8+j*12, 4* sizeof(char));
             printf("%s\n", bar);
+            row++;
         }
         delete(read);
     }
+    printf("\n< %d Rows x 3 Cols >\n\n", row);
 }
 
 void nestLoopHashJoin(int startBlk){
@@ -752,18 +770,19 @@ int main() {
         return -1;
     }
 
-
-    sortRel(RELATION_R, 8000);
+    sortRel(RELATION_R, SORTED_R);
     std::cout<<"Empty Blocks: "<<buf.numFreeBlk<<std::endl;
 
 
-    auto bpt_r = new BPT_Disx(8000, 8015, 9000, &buf);
+    auto bpt_r = new BPT_Disx(SORTED_R, SORTED_R+15, BPT_R, &buf);
     bpt_r->find(40, 2600);
 
-    sortRel(RELATION_S, 8020);
+    sortRel(RELATION_S, SORTED_S);
 
-    auto bpt_s = new BPT_Disx(8020, 8051, 9020, &buf);
+    auto bpt_s = new BPT_Disx(SORTED_S, SORTED_S+31, BPT_S, &buf);
     bpt_s->find(60, 2610);
+
+    showBlocksInDisc(2610, 2611);
     /* Read the block from the hard disk */
 //    blk = getBlockFromDiskToBuf(1, &buf);
 //    showBlock(blk);

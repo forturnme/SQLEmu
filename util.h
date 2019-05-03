@@ -51,7 +51,8 @@ void showBlock(const unsigned char *blk){
     int Y = -1;
     int addr = -1;
     char str[5];
-    std::cout << "[BLK] " << getBlkPosInMem(blk) << " /" << buf.numAllBlk << " blocks in memory - " << (isBlkUsed(blk)?"USED":"IDLE") << std::endl;
+    std::cout << "[BLK] " << getBlkPosInMem(blk) << " /" << buf.numAllBlk <<
+        " blocks in memory - " << (isBlkUsed(blk)?"USED":"IDLE") << std::endl;
     int i;
     printf("      ");
     for (i = 0; i < 7; i++) //一个blk存7个元组加一个地址
@@ -109,8 +110,7 @@ void sortBlock(const unsigned char *blk){
     }
 }
 
-
 void printIO(Buffer *buff){
     // 打印IO次数
-    std::cout << '\n' << "IO's is " << buff->numIO << std::endl;
+    std::cout << '\n' << "[IO TOTAL] " << buff->numIO << std::endl;
 }
