@@ -11,6 +11,7 @@ class readBlocks{
      * 可以指定：
      *         -这个区域占有内存块的数量
      *         -能读取的块号范围
+     *         -读到0地址结尾的块后也会停止
      * 需要维护：
      *         -其中的内存块和磁盘块的对应关系
      *         -当前读取到的内存块和块中的位置
@@ -106,7 +107,7 @@ inline bool readBlocks::toNextBlock() {
     // 块指针后移1个
     if(this->isFront(this->block)){
         int blkNumNow = this->getNthNumberVal(this->block);
-        if(blkNumNow >= this->endBlock) return false;
+        if(fourCharToInt(getNthBlock(block)+48)==0 || blkNumNow >= this->endBlock) return false;
         if(full())this->removeLastBlk();
         this->loadBlkFromDisc(blkNumNow+1);
     }
@@ -205,7 +206,7 @@ bool readBlocks::forward() {
 
 bool readBlocks::end() {
     // 如果到达最后则返回true
-    if(this->getNthNumberVal(this->block)==this->endBlock){
+    if(fourCharToInt(getNthBlock(block)+48)==0||this->getNthNumberVal(this->block)==this->endBlock){
         if(this->tuple>=6)return true;
         return getNthTupleY(this->getNthBlock(this->block), this->tuple + 1, 0) == 0;
     }
@@ -240,12 +241,16 @@ bool readBlocks::refresh() {
     int lim = this->memCnt-this->qLength();
     for (int i = 0; i < lim; ++i) {
         // 首先把剩下的区域填充完
+        // 如果队首的续地址已经是0则不继续装
+        if(fourCharToInt(getNthBlock(qFront-1)+48)==0)break;
         blkToLoad = this->getNthNumber(this->qLength()-1)+1;
         if(blkToLoad>this->endBlock) break;
         this->loadBlkFromDisc(blkToLoad);
     }
     for (int i = 0; i < this->memCnt; ++i) {
         // 然后开始尽可能替换块
+        // 如果队首的续地址已经是0则不继续装
+        if(fourCharToInt(getNthBlock(qFront-1)+48)==0)break;
         if(this->block==0)break;
         blkToLoad = this->getNthNumber(this->qLength()-1)+1;
         if(blkToLoad>this->endBlock)break;

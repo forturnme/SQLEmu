@@ -1,4 +1,9 @@
+/*
+ * Created by longh in 2019
+ */
+
 #include <iostream>
+#include <cstdlib>
 
 // MEM maneuvering
 #include "util.h"
@@ -573,10 +578,10 @@ void doUnion(int startBlk, bool sorted){
     delete(writeBlk);
 }
 
-void showBlocksInDisc(int start, int end){
-    // 显示磁盘上从start到end的块
+void showBlocksInDisc(int start){
+    // 显示磁盘上从start开始的块
     std::cout<<"________________________"<<std::endl;
-    auto read = new readBlocks(start, end, 7, &buf);
+    auto read = new readBlocks(start, 99999, 7, &buf);
     char bar[5] = {0};
     int row = 0;
     for(unsigned char* i=read->getTuple();i!=NULL;i=read->getTuple()){
@@ -592,11 +597,11 @@ void showBlocksInDisc(int start, int end){
     delete(read);
 }
 
-void showBlocksInDiscLong(int start, int end){
-    // 显示磁盘上从start到end的三元块
-    int row = 0;
+void showBlocksInDiscLong(int start){
+    // 显示磁盘上从start开始的三元块
+    int row = 0, flg = 0;
     std::cout<<"________________________________"<<std::endl;
-    for (int i = start; i <= end; ++i) {
+    for (int i = start;; ++i) {
         auto read = new readBlocks(i, i, 1, &buf);
         char bar[5] = {0};
         unsigned char* p=read->getTupleSilent();
@@ -613,7 +618,10 @@ void showBlocksInDiscLong(int start, int end){
             printf("%s\n", bar);
             row++;
         }
+        // 获取续地址
+        flg = fourCharToInt(p+48);
         delete(read);
+        if(flg==0)break;
     }
     printf("\n< %d Rows x 3 Cols >\n\n", row);
 }
@@ -759,6 +767,94 @@ void hashNestLoopJoin(int startBlk){
     delete(joinBuf);
 }
 
+void showTabHead(int lineCnt, int rel){
+    // 显示表头
+    if(lineCnt == 2 && rel == RELATION_R) std::cout<<"INDEX | R.A     R.B"<<std::endl;
+    if(lineCnt == 2 && rel == RELATION_S) std::cout<<"INDEX | S.C     S.D"<<std::endl;
+    if(lineCnt == 3) std::cout<<"INDEX | A       B       C"<<std::endl;
+}
+
+void showMainMenu(){
+    // 显示Logo和主菜单
+    // 这是Logo（笑）
+    std::cout<<R"(%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%)"<<std::endl;
+    std::cout<<R"( _______   _______   _          _______   _______           )"<<std::endl;
+    std::cout<<R"((  ____ \ (  ___  ) ( \        (  ____ \ (       ) |\     /|)"<<std::endl;
+    std::cout<<R"(| (    \/ | (   ) | | (        | (    \/ | () () | | )   ( |)"<<std::endl;
+    std::cout<<R"(| (_____  | |   | | | |        | (__     | || || | | |   | |)"<<std::endl;
+    std::cout<<R"((_____  ) | |   | | | |        |  __)    | |(_)| | | |   | |)"<<std::endl;
+    std::cout<<R"(      ) | | | /\| | | |        | (       | |   | | | |   | |)"<<std::endl;
+    std::cout<<R"(/\____) | | (_\ \ | | (____/\  | (____/\ | )   ( | | (___) |)"<<std::endl;
+    std::cout<<R"(\_______) (____\/_) (_______/  (_______/ |/     \| (_______))"<<std::endl;
+    std::cout                                                                   <<std::endl;
+    std::cout<<R"(%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%)"<<std::endl;
+    std::cout<<R"(       (C) longh 2019. Copy Left. No Rights Reserved.       )"<<std::endl;
+    std::cout                                                                   <<std::endl;
+
+    // 这是主菜单
+    std::cout<<R"(################# PLEASE ENTER YOUR CHOICE #################)"<<std::endl;
+    std::cout<<R"(##           1.Choose tuples from relationship            ##)"<<std::endl;
+    std::cout<<R"(##           2.Do projection with relationship            ##)"<<std::endl;
+    std::cout<<R"(##           3.Join relationships and save                ##)"<<std::endl;
+    std::cout<<R"(##           4.Union, Intersection or Difference          ##)"<<std::endl;
+    std::cout<<R"(##           0.(or any other thing) Quit program          ##)"<<std::endl;
+    std::cout<<R"(############################################################)"<<std::endl;
+    std::cout                                                                   <<std::endl;
+    std::cout<<R"(Your choice: )";
+}
+
+void chooseTupleMenu(BPT_Disx* bptr, BPT_Disx* bpts){
+    // 选择元组的菜单
+    // 两个B+树不是全局变量，需要传进来...
+    fflush(stdin);
+    char sel = 0;
+    while (sel != 'r' && sel != 's'){
+        std::cout<<R"(Which relationship do you want to select? (r/s) )";
+        std::cin>>sel;
+    }
+    fflush(stdin);
+    char method = 0;
+    while (method != 'L' && method != 'B' && method != 'T'){
+        std::cout<<R"(Which method do you want to select? (L for linear, B for binary, T for b+tree) )";
+        std::cin>>method;
+    }
+    int val = 0;
+    fflush(stdin);
+    std::cout<<R"(Enter a value you want to search: )";
+    std::cin>>val;
+    int blk = 0; // 开始存储的块号
+    fflush(stdin);
+    while (blk < 100 || blk >= 1000){
+        std::cout<<R"(Enter start block less than 1000 but more than 100 that you want to store result: )";
+        std::cin>>blk;
+    }
+    int IO_old = buf.numIO;
+    int rel = sel=='r'?RELATION_R:RELATION_S; // 指示关系
+    switch (method){
+        case 'L':
+            selectFromRel_linear(val, rel, blk);
+            break;
+        case 'B':
+            selectFromRel_Binary(val, rel==0?SORTED_R:SORTED_S, rel==0?SORTED_R+15:SORTED_S+31, blk);
+            break;
+        case 'T':
+            if(rel==0){
+                bptr->find(val, blk);
+            } else{
+                bpts->find(val, blk);
+            }
+            break;
+        default:
+            break;
+    }
+    //  显示结果
+    std::cout<<"You queried for val "<<val<<std::endl;
+    showTabHead(2, rel);
+    showBlocksInDisc(blk);
+    std::cout<<"[IO's for this query] "<<buf.numIO-IO_old<<std::endl;
+    system("pause");
+}
+
 int main() {
     // 以例程为脚手架
     unsigned char *blk; /* A pointer to a block */
@@ -771,20 +867,33 @@ int main() {
     }
 
     int IOlast = buf.numIO;
-
     std::cout<<"< Presorting R and S...... >"<<std::endl;
     sortRel(RELATION_R, SORTED_R);
     sortRel(RELATION_S, SORTED_S);
+    std::cout<<"< Presorting completed with "<<buf.numIO-IOlast<<" IO's >"<<std::endl;
 
-    std::cout<<"< Presorting complete with "<<buf.numIO-IOlast<<" IO's >"<<std::endl;
+    IOlast = buf.numIO;
+    std::cout<<"< Building B+ Tree...... >"<<std::endl;
+    auto bptr = new BPT_Disx(SORTED_R, SORTED_R+15, BPT_R, &buf);
+    auto bpts = new BPT_Disx(SORTED_S, SORTED_S+31, BPT_R, &buf);
+    std::cout<<"< B+ tree built with "<<buf.numIO-IOlast<<" IO's >"<<std::endl;
+    std::cout<<"< Preparation completed with "<<buf.numIO<<" IO's >"<<std::endl;
+
     IOlast = buf.numIO;
 
-    std::cout<<"       ______"<<std::endl;
-    std::cout<<"      / /    \\"<<std::endl;
-    std::cout<<"      \\ \\     "<<std::endl;
-    std::cout<<"       \\ \\"<<std::endl;
-    std::cout<<"       / /"<<std::endl;
-    std::cout<<"  \\_____/"<<std::endl;
+    showMainMenu();
+
+    fflush(stdin);
+    char c = 0;
+    std::cin>>c;
+
+    switch (c){
+        case '1':
+            chooseTupleMenu(bptr, bpts);
+            break;
+        default:
+            break;
+    }
 
     auto bpt_r = new BPT_Disx(SORTED_R, SORTED_R+15, BPT_R, &buf);
     bpt_r->find(40, 2600);
@@ -792,7 +901,8 @@ int main() {
     auto bpt_s = new BPT_Disx(SORTED_S, SORTED_S+31, BPT_S, &buf);
     bpt_s->find(60, 2610);
 
-    showBlocksInDisc(2610, 2611);
+    showTabHead(2, 0);
+    showBlocksInDisc(2610);
     /* Read the block from the hard disk */
 //    blk = getBlockFromDiskToBuf(1, &buf);
 //    showBlock(blk);
