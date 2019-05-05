@@ -1041,5 +1041,6 @@ int main() {
                 printIO(&buf);
                 exit(0);
         }
+        system("cls");
     }
 }
