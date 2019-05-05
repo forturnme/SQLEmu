@@ -116,11 +116,13 @@ void BPT_Disx::find(int val, int startBlk) {
             // 说明在某个key的右边
             memcpy(bar, fBlk+left*12+8, 4* sizeof(char));
         }
-        blkNum = atoi(bar);
         freeBlockInBuffer(fBlk, buff);
+        blkNum = atoi(bar);
     }
     // 得到了要找到的值的起始块号，顺序查找
+
     auto read = new readBlocks(blkNum, leafEndBlk, 1, buff);
+
     while (true){
         nodeVal = read->getValSilent(0);
         if(nodeVal>val)break;
@@ -128,7 +130,9 @@ void BPT_Disx::find(int val, int startBlk) {
             // 命中，写入
             write->writeOneTuple(read->getTupleSilent());
         }
-        if(read->end())break;
+
+        if(read->end())
+            break;
         read->forward();
     }
     delete(read);

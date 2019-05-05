@@ -302,7 +302,7 @@ bool readBlocks::recall() {
 readBlocks::~readBlocks() {
     // 释放全部持有的内存块
     int lim = this->qLength();
-    for (int i = 0; i < qLength(); ++i) {
+    for (int i = 0; i < lim; ++i) {
         freeBlockInBuffer(this->getNthBlock(i), this->buff);
     }
     free(this->blkNums);

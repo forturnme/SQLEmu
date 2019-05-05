@@ -705,7 +705,7 @@ void hashNestLoopJoin(int startBlk){
             while (true){
                 // 遍历内存里的S元组
                 if(readS->getValSilent(0)==rval0){
-                    memcpy(bar+4, readS->getTupleSilent()+4, 4* sizeof(char));
+                    memcpy(bar+8, readS->getTupleSilent()+4, 4* sizeof(char));
                     joinBuf->writeOneLongTuple((unsigned char*)bar);
                 }
                 if(readS->end())break;
@@ -726,7 +726,7 @@ void showTabHead(int lineCnt, int rel){
     if(lineCnt == 2 && rel == RELATION_R) std::cout<<"INDEX | R.A     R.B"<<std::endl;
     if(lineCnt == 2 && rel == 2) std::cout<<"INDEX | P1      P2"<<std::endl;
     if(lineCnt == 2 && rel == RELATION_S) std::cout<<"INDEX | S.C     S.D"<<std::endl;
-    if(lineCnt == 3) std::cout<<"INDEX | A       B       C"<<std::endl;
+    if(lineCnt == 3) std::cout<<"INDEX | A       B       D"<<std::endl;
 }
 
 void showBlocksInDisc(int start){
@@ -994,7 +994,6 @@ void setAlgorithmMenu(){
 
 int main() {
     // 以例程为脚手架
-    unsigned char *blk; /* A pointer to a block */
 
     /* Initialize the buffer */
     if (!initBuffer(520, 64, &buf))
@@ -1012,7 +1011,7 @@ int main() {
     IOlast = buf.numIO;
     std::cout<<"< Building B+ Tree...... >"<<std::endl;
     auto bptr = new BPT_Disx(SORTED_R, SORTED_R+15, BPT_R, &buf);
-    auto bpts = new BPT_Disx(SORTED_S, SORTED_S+31, BPT_R, &buf);
+    auto bpts = new BPT_Disx(SORTED_S, SORTED_S+31, BPT_S, &buf);
     std::cout<<"< B+ tree built with "<<buf.numIO-IOlast<<" IO's >"<<std::endl;
     std::cout<<"< Preparation completed with "<<buf.numIO<<" IO's >"<<std::endl;
 
