@@ -107,7 +107,7 @@ inline bool readBlocks::toNextBlock() {
     // 块指针后移1个
     if(this->isFront(this->block)){
         int blkNumNow = this->getNthNumberVal(this->block);
-        if(fourCharToInt(getNthBlock(block)+48)==0 || blkNumNow >= this->endBlock) return false;
+        if(fourCharToInt(getNthBlock(block)+56)==0 || blkNumNow >= this->endBlock) return false;
         if(full())this->removeLastBlk();
         this->loadBlkFromDisc(blkNumNow+1);
     }
@@ -206,7 +206,7 @@ bool readBlocks::forward() {
 
 bool readBlocks::end() {
     // 如果到达最后则返回true
-    if(fourCharToInt(getNthBlock(block)+48)==0||this->getNthNumberVal(this->block)==this->endBlock){
+    if(fourCharToInt(getNthBlock(block)+56)==0||this->getNthNumberVal(this->block)==this->endBlock){
         if(this->tuple>=6)return true;
         return getNthTupleY(this->getNthBlock(this->block), this->tuple + 1, 0) == 0;
     }
@@ -242,7 +242,7 @@ bool readBlocks::refresh() {
     for (int i = 0; i < lim; ++i) {
         // 首先把剩下的区域填充完
         // 如果队首的续地址已经是0则不继续装
-        if(fourCharToInt(getNthBlock(qFront-1)+48)==0)break;
+        if(fourCharToInt(getNthBlock(qFront-1)+56)==0)break;
         blkToLoad = this->getNthNumber(this->qLength()-1)+1;
         if(blkToLoad>this->endBlock) break;
         this->loadBlkFromDisc(blkToLoad);
@@ -250,7 +250,7 @@ bool readBlocks::refresh() {
     for (int i = 0; i < this->memCnt; ++i) {
         // 然后开始尽可能替换块
         // 如果队首的续地址已经是0则不继续装
-        if(fourCharToInt(getNthBlock(qFront-1)+48)==0)break;
+        if(fourCharToInt(getNthBlock(qFront-1)+56)==0)break;
         if(this->block==0)break;
         blkToLoad = this->getNthNumber(this->qLength()-1)+1;
         if(blkToLoad>this->endBlock)break;
