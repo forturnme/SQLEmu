@@ -1037,10 +1037,9 @@ int main() {
                 setAlgorithmMenu();
                 break;
             default:
+                system("./cleanblockfiles.bat");
                 printIO(&buf);
                 exit(0);
         }
     }
-
-    return 0;
 }
