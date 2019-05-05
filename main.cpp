@@ -641,6 +641,7 @@ void nestLoopHashJoin(int startBlk){
     for (int i = 0; i < 6; ++i) {
         delete(hashes[i]);
     }
+    delete(read);
     delete(joinBuf);
 }
 
